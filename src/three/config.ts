@@ -16,6 +16,11 @@ export const worldToCell = (wx: number, wz: number): Coord | null => {
   return { x, y };
 };
 
+// Battle layout: own fleet sits toward the camera, enemy waters behind —
+// the Battleship "laptop" opened on the table.
+export const PLAYER_BOARD_POS: [number, number, number] = [0, 0, 6.2];
+export const ENEMY_BOARD_POS: [number, number, number] = [0, 0, -6.2];
+
 export const PALETTE = {
   deepSea: '#04101e',
   seaMid: '#0a2238',

@@ -24,7 +24,8 @@ const FRAG = /* glsl */ `
 
   void main() {
     vec2 g = vUv * uGrid;
-    vec2 d = abs(fract(g) - 0.5);
+    // distance to the nearest cell border (g integer = border), not cell center
+    vec2 d = abs(fract(g + 0.5) - 0.5);
     float line = 1.0 - smoothstep(0.0, 0.06, min(d.x, d.y));
     float pulse = 0.75 + 0.25 * sin(uTime * 0.8 + (vUv.x + vUv.y) * 6.2831);
     float edge = smoothstep(0.5, 0.42, distance(vUv, vec2(0.5)));

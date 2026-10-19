@@ -17,11 +17,13 @@ function CameraRig() {
     const menuLike = phase === 'menu' || phase === 'difficulty' || phase === 'howto';
     const base = menuLike
       ? new THREE.Vector3(Math.sin(t.current * 0.08) * 4, 13.5, 12 + Math.cos(t.current * 0.08) * 2)
-      : new THREE.Vector3(0, 13.2, 11.4);
+      : phase === 'deploy'
+        ? new THREE.Vector3(0, 13.2, 11.4)
+        : new THREE.Vector3(0, 17.5, 16.5);
     base.x += pointer.x * 0.7;
     base.y += pointer.y * 0.4;
     camera.position.lerp(base, 0.045);
-    camera.lookAt(0, 0, 0);
+    camera.lookAt(0, 0, phase === 'deploy' || menuLike ? 0 : -1.5);
   });
   return null;
 }
@@ -51,7 +53,8 @@ function SceneContent() {
       <hemisphereLight args={['#b8d8f0', '#081a2c', 0.5]} />
       <directionalLight position={[-6, 12, 6]} intensity={1.35} color="#cfe8ff" />
       <pointLight position={[6, 4, -4]} intensity={6} color={PALETTE.accentSoft} distance={20} />
-      <Ocean amp={reducedMotion ? 0.08 : 0.16} caustics={low ? 0.12 : 0.22} segments={low ? 48 : 96} />
+      <directionalLight position={[8, 5, -9]} intensity={0.55} color={PALETTE.accentSoft} />
+      <Ocean amp={reducedMotion ? 0.08 : 0.16} caustics={low ? 0.4 : 0.9} segments={low ? 48 : 96} />
       <BoardScene />
       <CameraRig />
       {!low && (
