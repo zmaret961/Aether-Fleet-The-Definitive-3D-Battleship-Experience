@@ -45,13 +45,13 @@ const FRAG = /* glsl */ `
   varying vec3 vNormalW;
   varying float vElev;
 
-  // Layered sine interference — cheap bounded shimmer, kept fine-grained.
-  float caustic(vec2 p, float t) {
+  // Fine multi-band ripple height — perturbs the normal, no blobs.
+  float ripple(vec2 p, float t) {
     float v = 0.0;
-    v += sin(p.x * 1.9 + t * 1.1) * sin(p.y * 1.4 - t * 0.8);
-    v += sin((p.x + p.y) * 2.6 - t * 1.3) * 0.6;
-    v += sin(p.x * 0.8 - p.y * 1.1 + t * 0.6) * 0.4;
-    return smoothstep(0.85, 1.25, v);
+    v += sin(p.x * 3.1 + t * 1.1) * sin(p.y * 2.7 - t * 0.9);
+    v += sin((p.x - p.y) * 4.4 + t * 1.6) * 0.55;
+    v += sin(p.x * 6.8 - t * 2.2) * sin(p.y * 5.9 + t * 1.5) * 0.35;
+    return v / 1.9;
   }
 
   void main() {
@@ -59,17 +59,29 @@ const FRAG = /* glsl */ `
     vec3 viewDir = normalize(cameraPosition - vWorld);
     vec3 lightDir = normalize(vec3(-0.35, 0.8, 0.45));
 
-    float fres = pow(1.0 - max(dot(viewDir, n), 0.0), 4.0);
+    // perturb the geometric normal with fine ripple detail
+    float e = 0.3;
+    vec2 p = vWorld.xz * 1.5;
+    float r  = ripple(p, uTime);
+    float rx = ripple(p + vec2(e, 0.0), uTime);
+    float rz = ripple(p + vec2(0.0, e), uTime);
+    vec3 nr = normalize(n + vec3((rx - r) * 0.7, 0.0, (rz - r) * 0.7));
+
+    float fres = pow(1.0 - max(dot(viewDir, nr), 0.0), 4.0);
     float elevMix = smoothstep(-0.9, 1.0, vElev);
-    vec3 col = mix(uDeep, uShallow, elevMix * 0.5);
+    vec3 col = mix(uDeep, uShallow, elevMix * 0.4);
 
-    float spec = pow(max(dot(reflect(-lightDir, n), viewDir), 0.0), 90.0);
-    col += spec * vec3(0.55, 0.8, 0.9) * 0.35;
+    // sky glints across the ripple normals — broad sheen, no pattern
+    float spec = pow(max(dot(reflect(-lightDir, nr), viewDir), 0.0), 60.0);
+    col += spec * vec3(0.55, 0.8, 0.9) * 0.5;
 
-    float ca = caustic(vWorld.xz * 1.6, uTime * 0.45);
-    col += ca * uAccent * uCaustics;
+    // sparse glints on ripple peaks, masked into drifting patches so it
+    // never reads as a regular dot field
+    float patch = 0.5 + 0.5 * sin(vWorld.x * 0.23 + uTime * 0.35) * sin(vWorld.z * 0.31 - uTime * 0.27);
+    float sp = smoothstep(0.94, 1.0, r) * smoothstep(0.55, 0.9, patch);
+    col += sp * uAccent * uCaustics;
 
-    col += fres * uAccent * 0.12;
+    col += fres * uAccent * 0.14;
 
     // distance fog into the abyss
     float d = distance(cameraPosition, vWorld);
@@ -80,7 +92,7 @@ const FRAG = /* glsl */ `
   }
 `;
 
-export function Ocean({ amp = 0.16, caustics = 0.22, segments = 96 }: { amp?: number; caustics?: number; segments?: number }) {
+export function Ocean({ amp = 0.16, caustics = 0.9, segments = 96 }: { amp?: number; caustics?: number; segments?: number }) {
   const mat = useRef<THREE.ShaderMaterial>(null);
   const uniforms = useMemo(
     () => ({
