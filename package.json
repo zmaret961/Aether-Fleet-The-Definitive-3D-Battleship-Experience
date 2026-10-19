@@ -1,0 +1,44 @@
+{
+  "name": "aether-fleet",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@react-three/drei": "^10.3.0",
+    "@react-three/fiber": "^9.1.2",
+    "@react-three/postprocessing": "^3.0.4",
+    "framer-motion": "^12.18.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "three": "^0.177.0",
+    "zustand": "^5.0.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.29.0",
+    "@tailwindcss/vite": "^4.1.10",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@types/three": "^0.177.0",
+    "@vitejs/plugin-react": "^4.6.0",
+    "eslint": "^9.29.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "tailwindcss": "^4.1.10",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.34.1",
+    "vite": "^6.3.5",
+    "vite-plugin-pwa": "^0.21.2",
+    "vitest": "^5.0.5"
+  }
+}
