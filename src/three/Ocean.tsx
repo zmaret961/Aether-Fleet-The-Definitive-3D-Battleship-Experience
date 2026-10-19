@@ -72,8 +72,12 @@ const FRAG = /* glsl */ `
     vec3 col = mix(uDeep, uShallow, elevMix * 0.4);
 
     // sky glints across the ripple normals — broad sheen, no pattern
-    float spec = pow(max(dot(reflect(-lightDir, nr), viewDir), 0.0), 60.0);
-    col += spec * vec3(0.55, 0.8, 0.9) * 0.5;
+    float spec = pow(max(dot(reflect(-lightDir, nr), viewDir), 0.0), 38.0);
+    col += spec * vec3(0.55, 0.8, 0.9) * 0.7;
+
+    // slow rolling sheen so the surface visibly moves
+    float band = 0.5 + 0.5 * sin(vWorld.x * 0.35 + vWorld.z * 0.12 + uTime * 0.5);
+    col += uAccent * band * 0.045;
 
     // sparse glints on ripple peaks, masked into drifting patches so it
     // never reads as a regular dot field

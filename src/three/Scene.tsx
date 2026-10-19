@@ -51,6 +51,7 @@ function SceneContent() {
       <hemisphereLight args={['#b8d8f0', '#081a2c', 0.5]} />
       <directionalLight position={[-6, 12, 6]} intensity={1.35} color="#cfe8ff" />
       <pointLight position={[6, 4, -4]} intensity={6} color={PALETTE.accentSoft} distance={20} />
+      <directionalLight position={[8, 5, -9]} intensity={0.55} color={PALETTE.accentSoft} />
       <Ocean amp={reducedMotion ? 0.08 : 0.16} caustics={low ? 0.4 : 0.9} segments={low ? 48 : 96} />
       <BoardScene />
       <CameraRig />
