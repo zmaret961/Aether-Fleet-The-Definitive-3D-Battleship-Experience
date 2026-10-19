@@ -153,18 +153,18 @@ export const useGame = create<GameStore>((set, get) => {
 
     if (ev.outcome.kind === 'miss') {
       audio.miss();
-      fx.emit({ type: 'splash', coord: c });
-      fx.emit({ type: 'marker', coord: c, outcome: 'miss' });
+      fx.emit({ type: 'splash', coord: c, side: 'enemy' });
+      fx.emit({ type: 'marker', coord: c, outcome: 'miss', side: 'enemy' });
       set({ lastOutcome: { by: 'player', text: 'Miss', seq: match.log.length } });
     } else {
       audio.hit();
-      fx.emit({ type: 'explosion', coord: c });
-      fx.emit({ type: 'marker', coord: c, outcome: 'hit' });
+      fx.emit({ type: 'explosion', coord: c, side: 'enemy' });
+      fx.emit({ type: 'marker', coord: c, outcome: 'hit', side: 'enemy' });
       const shipName = 'shipId' in ev.outcome ? shipSpec(ev.outcome.shipId).name : '';
       if (ev.outcome.kind === 'sunk' || ev.outcome.kind === 'win') {
         setTimeout(() => {
           audio.sink();
-          fx.emit({ type: 'sink', coord: c });
+          fx.emit({ type: 'sink', coord: c, side: 'enemy' });
         }, 450);
         set({
           lastOutcome: {
@@ -198,18 +198,18 @@ export const useGame = create<GameStore>((set, get) => {
       const ev = shoot(match, 'ai', c);
       // flip to the player's own board so the incoming shot lands on their fleet
       set({ boardView: 'player' });
-      fx.emit({ type: 'sonar', coord: c });
+      fx.emit({ type: 'sonar', coord: c, side: 'player' });
 
       setTimeout(() => {
         if (ev.outcome.kind === 'miss') {
           audio.miss();
-          fx.emit({ type: 'splash', coord: c, big: false });
-          fx.emit({ type: 'marker', coord: c, outcome: 'miss' });
+          fx.emit({ type: 'splash', coord: c, big: false, side: 'player' });
+          fx.emit({ type: 'marker', coord: c, outcome: 'miss', side: 'player' });
           set({ lastOutcome: { by: 'ai', text: 'Enemy missed', seq: match.log.length } });
         } else {
           audio.hit();
-          fx.emit({ type: 'explosion', coord: c });
-          fx.emit({ type: 'marker', coord: c, outcome: 'hit' });
+          fx.emit({ type: 'explosion', coord: c, side: 'player' });
+          fx.emit({ type: 'marker', coord: c, outcome: 'hit', side: 'player' });
           const shipName = 'shipId' in ev.outcome ? shipSpec(ev.outcome.shipId).name : '';
           if (ev.outcome.kind === 'sunk' || ev.outcome.kind === 'win') {
             setTimeout(() => audio.sink(), 450);
@@ -357,7 +357,7 @@ export const useGame = create<GameStore>((set, get) => {
       const marks = s.match.enemy.marks;
       if (marks[c.y][c.x] !== 'unknown') return;
       audio.sonarPulse();
-      fx.emit({ type: 'sonar', coord: c });
+      fx.emit({ type: 'sonar', coord: c, side: 'enemy' });
       set({ target: c });
     },
 

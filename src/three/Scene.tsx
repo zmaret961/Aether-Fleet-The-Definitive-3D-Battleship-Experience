@@ -17,11 +17,13 @@ function CameraRig() {
     const menuLike = phase === 'menu' || phase === 'difficulty' || phase === 'howto';
     const base = menuLike
       ? new THREE.Vector3(Math.sin(t.current * 0.08) * 4, 13.5, 12 + Math.cos(t.current * 0.08) * 2)
-      : new THREE.Vector3(0, 13.2, 11.4);
+      : phase === 'deploy'
+        ? new THREE.Vector3(0, 13.2, 11.4)
+        : new THREE.Vector3(0, 17.5, 16.5);
     base.x += pointer.x * 0.7;
     base.y += pointer.y * 0.4;
     camera.position.lerp(base, 0.045);
-    camera.lookAt(0, 0, 0);
+    camera.lookAt(0, 0, phase === 'deploy' || menuLike ? 0 : -1.5);
   });
   return null;
 }

@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import { fx } from '../state/fx';
 import type { FxEvent } from '../state/fx';
 import type { Coord } from '../game/types';
-import { cellToWorld, PALETTE } from './config';
+import { cellToWorld, PALETTE, PLAYER_BOARD_POS, ENEMY_BOARD_POS } from './config';
+import type { BoardSide } from '../state/fx';
 
 interface Item {
   id: number;
@@ -12,6 +13,7 @@ interface Item {
   coord: Coord;
   big?: boolean;
   outcome?: 'miss' | 'hit';
+  side: BoardSide;
 }
 
 let nextId = 1;
@@ -142,7 +144,7 @@ export function EffectsLayer() {
     () =>
       fx.subscribe((e) => {
         if (e.type === 'marker') return; // markers come from board state, not fx
-        setItems((cur) => [...cur, { id: nextId++, kind: e.type, coord: e.coord, big: 'big' in e ? e.big : false }]);
+        setItems((cur) => [...cur, { id: nextId++, kind: e.type, coord: e.coord, big: 'big' in e ? e.big : false, side: e.side }]);
       }),
     [],
   );
@@ -154,7 +156,9 @@ export function EffectsLayer() {
   return (
     <group>
       {items.map((i) => {
-        const pos = cellToWorld(i.coord);
+        const base = i.side === 'player' ? PLAYER_BOARD_POS : ENEMY_BOARD_POS;
+        const [cx, cz] = cellToWorld(i.coord);
+        const pos: [number, number] = [cx + base[0], cz + base[2]];
         switch (i.kind) {
           case 'sonar':
             return <Ripple key={i.id} pos={pos} onDone={() => done(i.id)} />;

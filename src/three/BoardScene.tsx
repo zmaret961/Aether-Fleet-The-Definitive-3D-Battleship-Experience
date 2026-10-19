@@ -6,11 +6,11 @@ import { GRID_SIZE, shipSpec } from '../game/types';
 import type { Coord } from '../game/types';
 import { shipCellsFor, canPlace } from '../game/board';
 import { useGame } from '../state/store';
-import { BOARD_HALF, cellToWorld, PALETTE, worldToCell } from './config';
+import { BOARD_HALF, cellToWorld, PALETTE, worldToCell, PLAYER_BOARD_POS, ENEMY_BOARD_POS } from './config';
 import { GridPlane } from './GridPlane';
 import { MarkerField } from './Markers';
 import { ShipMesh } from './ShipMesh';
-import { EffectsLayer } from './Effects';
+import { EnemyAdmiral } from './EnemyAdmiral';
 
 function Frame() {
   const s = BOARD_HALF + 0.18;
@@ -89,11 +89,20 @@ function GhostCells({ cells, valid }: { cells: Coord[]; valid: boolean }) {
   );
 }
 
-export function BoardScene() {
+/** One full board surface at a world offset — grid, frame, markers, ships,
+ * optional pick plane. All contents use local cell coords inside the group. */
+function BoardGroup({
+  position,
+  board,
+  version,
+  side,
+}: {
+  position: [number, number, number];
+  board: Board;
+  version: number;
+  side: 'player' | 'enemy';
+}) {
   const phase = useGame((s) => s.phase);
-  const boardView = useGame((s) => s.boardView);
-  const match = useGame((s) => s.match);
-  const matchVersion = useGame((s) => s.matchVersion);
   const deploy = useGame((s) => s.deploy);
   const target = useGame((s) => s.target);
   const turnLock = useGame((s) => s.turnLock);
@@ -105,56 +114,45 @@ export function BoardScene() {
   const [hover, setHover] = useState<Coord | null>(null);
   const hoverRef = useRef<Coord | null>(null);
 
-  // The board the camera is currently looking at.
-  const shownBoard: Board = phase === 'deploy' ? deploy.board : match ? (boardView === 'enemy' ? match.enemy : match.player) : deploy.board;
-  const shownMarks = phase === 'deploy' ? deploy.board.marks : match ? shownBoard.marks : deploy.board.marks;
-
   const interactive =
-    (phase === 'deploy' && !!deploy.selected) || (phase === 'battle' && boardView === 'enemy' && !turnLock && !aiThinking);
+    side === 'enemy'
+      ? phase === 'battle' && !turnLock && !aiThinking
+      : phase === 'deploy' && !!deploy.selected;
 
   const ghost = useMemo(() => {
-    if (phase !== 'deploy' || !deploy.selected || !hover) return null;
+    if (side !== 'player' || phase !== 'deploy' || !deploy.selected || !hover) return null;
     const spec = shipSpec(deploy.selected);
     const cells = shipCellsFor(hover, deploy.orientation, spec.length);
     return { cells, valid: cells.every((c) => c.x < GRID_SIZE && c.y < GRID_SIZE) && canPlace(deploy.board, hover, deploy.orientation, spec.length) };
-  }, [phase, deploy.selected, deploy.orientation, deploy.board, hover]);
+  }, [side, phase, deploy.selected, deploy.orientation, deploy.board, hover]);
+
+  const showShips =
+    side === 'player' || phase === 'over'
+      ? board.ships
+      : board.ships.filter((s) => s.sunk);
 
   return (
-    <group>
+    <group position={position}>
       <GridPlane />
       <Frame />
-      <MarkerField marks={shownMarks} version={matchVersion} />
+      <MarkerField marks={board.marks} version={version} />
 
-      {/* ships */}
-      {phase === 'deploy' &&
-        deploy.board.ships.map((s) => (
-          <group
-            key={s.spec.id}
-            onClick={(e) => {
-              e.stopPropagation();
-              pickupShip(s.spec.id);
-            }}
-          >
+      {showShips.map((s) =>
+        side === 'player' && phase === 'deploy' ? (
+          <group key={s.spec.id} onClick={(e) => { e.stopPropagation(); pickupShip(s.spec.id); }}>
             <ShipMesh ship={s} />
           </group>
-        ))}
-      {phase === 'battle' &&
-        match &&
-        shownBoard.ships
-          .filter((s) => boardView === 'player' || s.sunk)
-          .map((s) => <ShipMesh key={s.spec.id} ship={s} />)}
-      {phase === 'over' &&
-        match &&
-        shownBoard.ships.map((s) => <ShipMesh key={s.spec.id} ship={s} />)}
+        ) : (
+          <ShipMesh key={s.spec.id} ship={s} />
+        ),
+      )}
 
       {ghost && <GhostCells cells={ghost.cells} valid={ghost.valid} />}
 
-      {phase === 'battle' && boardView === 'enemy' && hover && !target && !turnLock && (
+      {side === 'enemy' && phase === 'battle' && hover && !target && !turnLock && (
         <Reticle coord={hover} locked={false} />
       )}
-      {phase === 'battle' && boardView === 'enemy' && target && <Reticle coord={target} locked />}
-
-      <EffectsLayer />
+      {side === 'enemy' && phase === 'battle' && target && <Reticle coord={target} locked />}
 
       {/* invisible pick plane */}
       <mesh
@@ -162,7 +160,7 @@ export function BoardScene() {
         position={[0, 0.04, 0]}
         onPointerMove={(e) => {
           if (!interactive) return;
-          const c = worldToCell(e.point.x, e.point.z);
+          const c = worldToCell(e.point.x - position[0], e.point.z - position[2]);
           if (!c) return;
           if (!hoverRef.current || hoverRef.current.x !== c.x || hoverRef.current.y !== c.y) {
             hoverRef.current = c;
@@ -175,15 +173,39 @@ export function BoardScene() {
         }}
         onClick={(e) => {
           if (!interactive) return;
-          const c = worldToCell(e.point.x, e.point.z);
+          const c = worldToCell(e.point.x - position[0], e.point.z - position[2]);
           if (!c) return;
-          if (phase === 'deploy') tryPlace(c);
-          else aimAt(c);
+          if (side === 'enemy') aimAt(c);
+          else tryPlace(c);
         }}
       >
         <planeGeometry args={[BOARD_HALF * 2, BOARD_HALF * 2]} />
         <meshBasicMaterial visible={false} />
       </mesh>
+    </group>
+  );
+}
+
+export function BoardScene() {
+  const phase = useGame((s) => s.phase);
+  const match = useGame((s) => s.match);
+  const matchVersion = useGame((s) => s.matchVersion);
+  const deploy = useGame((s) => s.deploy);
+
+  const battle = (phase === 'battle' || phase === 'over') && match;
+
+  return (
+    <group>
+      {battle ? (
+        <>
+          {/* Battleship "laptop": your fleet in front, enemy waters behind */}
+          <BoardGroup position={PLAYER_BOARD_POS} board={match.player} version={matchVersion} side="player" />
+          <BoardGroup position={ENEMY_BOARD_POS} board={match.enemy} version={matchVersion} side="enemy" />
+          <EnemyAdmiral position={[0, 0, -13.5]} />
+        </>
+      ) : (
+        <BoardGroup position={[0, 0, 0]} board={deploy.board} version={matchVersion} side="player" />
+      )}
     </group>
   );
 }

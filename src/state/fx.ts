@@ -4,12 +4,14 @@ import type { Coord } from '../game/types';
  * Fire-and-forget visual event bus. The store emits, the 3D scene subscribes
  * and spawns transient effects (sonar ripples, splashes, explosions).
  */
+export type BoardSide = 'player' | 'enemy';
+
 export type FxEvent =
-  | { type: 'sonar'; coord: Coord }
-  | { type: 'splash'; coord: Coord; big?: boolean }
-  | { type: 'explosion'; coord: Coord }
-  | { type: 'sink'; coord: Coord }
-  | { type: 'marker'; coord: Coord; outcome: 'miss' | 'hit' };
+  | { type: 'sonar'; coord: Coord; side: BoardSide }
+  | { type: 'splash'; coord: Coord; big?: boolean; side: BoardSide }
+  | { type: 'explosion'; coord: Coord; side: BoardSide }
+  | { type: 'sink'; coord: Coord; side: BoardSide }
+  | { type: 'marker'; coord: Coord; outcome: 'miss' | 'hit'; side: BoardSide };
 
 type Handler = (e: FxEvent) => void;
 
