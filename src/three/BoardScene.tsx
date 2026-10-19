@@ -10,7 +10,7 @@ import { BOARD_HALF, cellToWorld, PALETTE, worldToCell, PLAYER_BOARD_POS, ENEMY_
 import { GridPlane } from './GridPlane';
 import { MarkerField } from './Markers';
 import { ShipMesh } from './ShipMesh';
-import { EnemyAdmiral } from './EnemyAdmiral';
+import { LegacyMonolith } from './LegacyMonolith';
 
 function Frame() {
   const s = BOARD_HALF + 0.18;
@@ -201,7 +201,7 @@ export function BoardScene() {
           {/* Battleship "laptop": your fleet in front, enemy waters behind */}
           <BoardGroup position={PLAYER_BOARD_POS} board={match.player} version={matchVersion} side="player" />
           <BoardGroup position={ENEMY_BOARD_POS} board={match.enemy} version={matchVersion} side="enemy" />
-          <EnemyAdmiral position={[0, 0, -13.5]} />
+          <LegacyMonolith position={[0, 0, -13.1]} />
         </>
       ) : (
         <BoardGroup position={[0, 0, 0]} board={deploy.board} version={matchVersion} side="player" />

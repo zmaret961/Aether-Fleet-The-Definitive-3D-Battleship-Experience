@@ -12,17 +12,18 @@ export function MainMenu() {
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center p-6 pointer-events-none">
-      <FadeIn className="text-center">
-        <div className="label-caps mb-3">Deep-Sea Command Interface</div>
-        <h1 className="title-display text-5xl sm:text-7xl mb-2">AETHER FLEET</h1>
-        <p className="text-white/55 text-sm sm:text-base tracking-wide mb-10">
-          A cinematic 3D Battleship experience
+      <FadeIn className="mb-5 rounded-3xl border border-white/10 bg-[#06101e]/45 px-8 py-6 text-center shadow-2xl backdrop-blur-xl sm:px-12 sm:py-8">
+        <div className="label-caps mb-3 text-accent">Cognition · Field exercise 01</div>
+        <h1 className="title-display text-6xl sm:text-8xl mb-2">Aether Fleet</h1>
+        <p className="text-white/70 text-sm sm:text-base tracking-wide mb-3">
+          A Cognition field exercise — powered by Devin
         </p>
+        <p className="label-caps">Autonomous engineering, at sea</p>
       </FadeIn>
       <FadeIn delay={0.15} className="pointer-events-auto">
-        <GlassPanel strong className="flex flex-col gap-3 p-6 w-72">
+        <GlassPanel strong className="glass-opaque flex flex-col gap-3 p-6 w-72">
           <GlassButton variant="primary" onClick={goDifficulty}>
-            Deploy Fleet
+            Choose Your Commander
           </GlassButton>
           <GlassButton onClick={goHowTo}>How to Play</GlassButton>
           <GlassButton onClick={() => setSettingsOpen(true)}>Settings</GlassButton>
@@ -33,6 +34,10 @@ export function MainMenu() {
           )}
         </GlassPanel>
       </FadeIn>
+      <div className="absolute bottom-5 flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_10px_var(--color-accent)]" />
+        <span className="label-caps !text-[0.55rem] !tracking-[0.16em]">FedRAMP High</span>
+      </div>
     </div>
   );
 }

@@ -2,11 +2,13 @@ import { useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Scene } from './three/Scene';
 import { BattleScreen } from './ui/BattleScreen';
+import { CommanderSelect } from './ui/CommanderSelect';
 import { DeployScreen } from './ui/DeployScreen';
 import { DifficultySelect } from './ui/DifficultySelect';
 import { HowTo } from './ui/HowTo';
 import { MainMenu } from './ui/MainMenu';
 import { ResultScreen } from './ui/ResultScreen';
+import { EasterEggs } from './ui/EasterEggs';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { useGame } from './state/store';
 import { audio } from './audio/engine';
@@ -54,12 +56,14 @@ export default function App() {
       <Scene />
       <AnimatePresence mode="wait">
         {phase === 'menu' && <MainMenu key="menu" />}
+        {phase === 'commander' && <CommanderSelect key="commander" />}
         {phase === 'difficulty' && <DifficultySelect key="diff" />}
         {phase === 'howto' && <HowTo key="how" />}
         {phase === 'deploy' && <DeployScreen key="dep" />}
         {phase === 'battle' && <BattleScreen key="bat" />}
         {phase === 'over' && <ResultScreen key="over" />}
       </AnimatePresence>
+      <EasterEggs />
       <SettingsPanel />
     </div>
   );

@@ -5,8 +5,8 @@
   --font-sans: 'Inter Variable', system-ui, -apple-system, sans-serif;
   --color-abyss: #04101e;
   --color-abyss-2: #0a2238;
-  --color-accent: #67e8f9;
-  --color-accent-2: #22d3ee;
+  --color-accent: #9aa7ff;
+  --color-accent-2: #5146ff;
   --color-amber-hit: #f59e0b;
   --color-ember: #fbbf24;
   --color-foam: #dbeafe;
@@ -50,6 +50,14 @@ body,
   -webkit-backdrop-filter: blur(26px) saturate(1.5);
 }
 
+.glass-opaque {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.025) 45%),
+    rgba(5, 18, 32, 0.94);
+  backdrop-filter: blur(24px) saturate(1.35);
+  -webkit-backdrop-filter: blur(24px) saturate(1.35);
+}
+
 .glass-interactive {
   transition:
     transform 0.35s cubic-bezier(0.22, 1.4, 0.36, 1),
@@ -59,11 +67,11 @@ body,
 }
 .glass-interactive:hover {
   transform: translateY(-2px) scale(1.015);
-  border-color: rgba(103, 232, 249, 0.4);
+  border-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     0 22px 60px rgba(0, 0, 0, 0.5),
-    0 0 30px rgba(34, 211, 238, 0.12);
+    0 0 30px rgba(34, 0, 255, 0.12);
 }
 .glass-interactive:active {
   transform: translateY(0) scale(0.985);
@@ -71,17 +79,17 @@ body,
 }
 
 .btn-primary {
-  background: linear-gradient(150deg, rgba(103, 232, 249, 0.9), rgba(34, 211, 238, 0.75));
-  color: #05222e;
+  background: linear-gradient(150deg, #b5c1ff, #5965ff 80%);
+  color: #10143b;
   font-weight: 650;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.25) inset,
-    0 10px 30px rgba(34, 211, 238, 0.25);
+    0 10px 30px rgba(34, 0, 255, 0.25);
 }
 .btn-primary:hover {
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.35) inset,
-    0 14px 40px rgba(34, 211, 238, 0.4);
+    0 14px 40px rgba(34, 0, 255, 0.4);
 }
 
 .btn-ghost {
@@ -90,7 +98,7 @@ body,
 }
 .btn-ghost:hover {
   background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(103, 232, 249, 0.35);
+  border-color: color-mix(in srgb, var(--color-accent) 44%, transparent);
 }
 
 .label-caps {
@@ -104,11 +112,11 @@ body,
 .title-display {
   font-weight: 800;
   letter-spacing: -0.03em;
-  background: linear-gradient(170deg, #ffffff, #a8ecff 55%, #38bdf8);
+  background: linear-gradient(170deg, #ffffff, #dce4ff 55%, #8796ff);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  text-shadow: 0 0 60px rgba(103, 232, 249, 0.3);
+  text-shadow: 0 0 60px rgba(81, 70, 255, 0.25);
 }
 
 /* hit markers / accents */
@@ -127,8 +135,32 @@ body,
 /* high contrast */
 .high-contrast .glass {
   background: rgba(4, 16, 30, 0.92);
-  border-color: rgba(103, 232, 249, 0.65);
+  border-color: color-mix(in srgb, var(--color-accent) 75%, transparent);
 }
 .high-contrast .label-caps { color: rgba(232, 243, 255, 0.9); }
+
+.confetti-burst {
+  position: fixed;
+  inset: 0;
+  z-index: 79;
+  overflow: hidden;
+  pointer-events: none;
+}
+.confetti-burst span {
+  position: absolute;
+  top: 48%;
+  left: 50%;
+  width: 7px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--confetti-color);
+  box-shadow: 0 0 14px var(--confetti-color);
+  animation: confetti-flight 1.65s cubic-bezier(0.15, 0.75, 0.2, 1) both;
+  animation-delay: var(--confetti-delay);
+}
+@keyframes confetti-flight {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.4) rotate(0); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1) rotate(540deg); }
+}
 
 canvas { display: block; }

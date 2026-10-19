@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { fx } from '../state/fx';
@@ -6,6 +6,7 @@ import type { FxEvent } from '../state/fx';
 import type { Coord } from '../game/types';
 import { cellToWorld, PALETTE, PLAYER_BOARD_POS, ENEMY_BOARD_POS } from './config';
 import type { BoardSide } from '../state/fx';
+import { MISSILE_FLIGHT_MS } from '../state/fx';
 
 interface Item {
   id: number;
@@ -135,6 +136,94 @@ function Flash({ pos, onDone }: { pos: [number, number]; onDone: () => void }) {
   return <pointLight ref={ref} position={[pos[0], 0.8, pos[1]]} color={PALETTE.hitHot} intensity={14} distance={7} />;
 }
 
+function Missile({
+  start,
+  end,
+  height,
+  color,
+  onDone,
+}: {
+  start: [number, number, number];
+  end: [number, number, number];
+  height: number;
+  color: string;
+  onDone: () => void;
+}) {
+  const ref = useRef<THREE.Group>(null);
+  const elapsed = useRef(0);
+  const finished = useRef(false);
+  const line = useMemo(() => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(new Float32Array(14 * 3), 3).setUsage(THREE.DynamicDrawUsage),
+    );
+    geometry.setDrawRange(0, 0);
+    const missileTrail = new THREE.Line(
+      geometry,
+      new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.86, depthWrite: false }),
+    );
+    missileTrail.frustumCulled = false;
+    return missileTrail;
+  }, [color]);
+
+  useEffect(() => () => {
+    line.geometry.dispose();
+    (line.material as THREE.Material).dispose();
+  }, [line]);
+
+  useFrame((_, dt) => {
+    if (finished.current) return;
+    elapsed.current += dt;
+    const progress = Math.min(elapsed.current / (MISSILE_FLIGHT_MS / 1000), 1);
+    const pointAt = (p: number) =>
+      new THREE.Vector3(
+        THREE.MathUtils.lerp(start[0], end[0], p),
+        THREE.MathUtils.lerp(start[1], end[1], p) + Math.sin(p * Math.PI) * height,
+        THREE.MathUtils.lerp(start[2], end[2], p),
+      );
+    const current = pointAt(progress);
+    const previous = pointAt(Math.max(0, progress - 0.015));
+    if (ref.current) {
+      ref.current.position.copy(current);
+      ref.current.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), current.sub(previous).normalize());
+    }
+
+    const positions = line.geometry.attributes.position as THREE.BufferAttribute;
+    const trailStart = Math.max(0, progress - 0.18);
+    const trailLength = progress - trailStart;
+    for (let i = 0; i < 14; i++) {
+      const p = trailStart + (i / 13) * trailLength;
+      const point = pointAt(p);
+      positions.setXYZ(i, point.x, point.y, point.z);
+    }
+    positions.needsUpdate = true;
+    line.geometry.setDrawRange(0, Math.max(2, Math.ceil(14 * Math.min(1, progress / 0.18))));
+
+    if (progress >= 1) {
+      finished.current = true;
+      onDone();
+    }
+  });
+
+  return (
+    <group>
+      <primitive object={line} />
+      <group ref={ref}>
+        <mesh>
+          <cylinderGeometry args={[0.055, 0.095, 0.5, 10]} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={2.2} metalness={0.35} roughness={0.25} />
+        </mesh>
+        <mesh position={[0, 0.3, 0]}>
+          <coneGeometry args={[0.095, 0.24, 10]} />
+          <meshBasicMaterial color="#ffffff" />
+        </mesh>
+        <pointLight intensity={2.4} color={color} distance={2.4} />
+      </group>
+    </group>
+  );
+}
+
 export function EffectsLayer() {
   const [items, setItems] = useState<Item[]>([]);
   const itemsRef = useRef(items);
@@ -162,6 +251,23 @@ export function EffectsLayer() {
         switch (i.kind) {
           case 'sonar':
             return <Ripple key={i.id} pos={pos} onDone={() => done(i.id)} />;
+          case 'missile': {
+            const start: [number, number, number] =
+              i.side === 'enemy'
+                ? [cx + PLAYER_BOARD_POS[0], 0.75, cz + PLAYER_BOARD_POS[2]]
+                : [0, 4, -13.5 + 1.15];
+            const end: [number, number, number] = [pos[0], 0.2, pos[1]];
+            return (
+              <Missile
+                key={i.id}
+                start={start}
+                end={end}
+                height={i.side === 'enemy' ? 2.6 : 3.8}
+                color={i.side === 'enemy' ? PALETTE.accent : PALETTE.enemy}
+                onDone={() => done(i.id)}
+              />
+            );
+          }
           case 'splash':
             return (
               <group key={i.id}>

@@ -17,11 +17,12 @@ import {
   shoot,
 } from '../game/engine';
 import type { Match, MatchStats } from '../game/engine';
-import { FLEET, shipSpec } from '../game/types';
+import { COMMANDERS, ENEMY_FLEET_NAMES, FLEET, shipSpec } from '../game/types';
+import type { CommanderId } from '../game/types';
 import type { Coord, Orientation, ShipSpec } from '../game/types';
-import { fx } from './fx';
+import { fx, MISSILE_FLIGHT_MS } from './fx';
 
-export type Phase = 'menu' | 'howto' | 'difficulty' | 'deploy' | 'battle' | 'over';
+export type Phase = 'menu' | 'howto' | 'commander' | 'difficulty' | 'deploy' | 'battle' | 'over';
 export type BoardView = 'enemy' | 'player';
 export type PerfMode = 'auto' | 'high' | 'low';
 
@@ -42,6 +43,17 @@ type Records = Partial<Record<Difficulty, PersistedRecord>>;
 
 const RECORDS_KEY = 'aether-fleet:records';
 const SETTINGS_KEY = 'aether-fleet:settings';
+const COMMANDER_KEY = 'aether-fleet:commander';
+
+const loadCommander = (): CommanderId => {
+  try {
+    const saved = localStorage.getItem(COMMANDER_KEY);
+    if (COMMANDERS.some((commander) => commander.id === saved)) return saved as CommanderId;
+  } catch {
+    /* private mode */
+  }
+  return 'scott-wu';
+};
 
 const loadRecords = (): Records => {
   try {
@@ -77,6 +89,7 @@ interface DeployState {
 interface GameStore {
   phase: Phase;
   difficulty: Difficulty;
+  commanderId: CommanderId;
   match: Match | null;
   matchVersion: number;
   ai: AIPlayer | null;
@@ -94,6 +107,9 @@ interface GameStore {
   goMenu: () => void;
   goHowTo: () => void;
   goDifficulty: () => void;
+  goCommander: () => void;
+  selectCommander: (id: CommanderId) => void;
+  concede: () => void;
   startDeploy: (d: Difficulty) => void;
   selectShip: (id: string) => void;
   rotateDeploy: () => void;
@@ -155,12 +171,12 @@ export const useGame = create<GameStore>((set, get) => {
       audio.miss();
       fx.emit({ type: 'splash', coord: c, side: 'enemy' });
       fx.emit({ type: 'marker', coord: c, outcome: 'miss', side: 'enemy' });
-      set({ lastOutcome: { by: 'player', text: 'Miss', seq: match.log.length } });
+      set({ lastOutcome: { by: 'player', text: 'CI failed', seq: match.log.length } });
     } else {
       audio.hit();
       fx.emit({ type: 'explosion', coord: c, side: 'enemy' });
       fx.emit({ type: 'marker', coord: c, outcome: 'hit', side: 'enemy' });
-      const shipName = 'shipId' in ev.outcome ? shipSpec(ev.outcome.shipId).name : '';
+      const shipName = 'shipId' in ev.outcome ? ENEMY_FLEET_NAMES[ev.outcome.shipId] : '';
       if (ev.outcome.kind === 'sunk' || ev.outcome.kind === 'win') {
         setTimeout(() => {
           audio.sink();
@@ -169,12 +185,12 @@ export const useGame = create<GameStore>((set, get) => {
         set({
           lastOutcome: {
             by: 'player',
-            text: `Enemy ${shipName} sunk`,
+            text: `Ticket closed: ${shipName}`,
             seq: match.log.length,
           },
         });
       } else {
-        set({ lastOutcome: { by: 'player', text: 'Direct hit', seq: match.log.length } });
+        set({ lastOutcome: { by: 'player', text: 'PR merged', seq: match.log.length } });
       }
     }
 
@@ -195,29 +211,31 @@ export const useGame = create<GameStore>((set, get) => {
       const { match, ai } = get();
       if (!match || !ai || match.winner) return;
       const c = ai.next(aiView(match));
-      const ev = shoot(match, 'ai', c);
-      // flip to the player's own board so the incoming shot lands on their fleet
-      set({ boardView: 'player' });
-      fx.emit({ type: 'sonar', coord: c, side: 'player' });
-
+      audio.fire();
+      fx.emit({ type: 'missile', coord: c, side: 'player' });
       setTimeout(() => {
+        if (get().phase !== 'battle' || get().match !== match) return;
+        const ev = shoot(match, 'ai', c);
         if (ev.outcome.kind === 'miss') {
           audio.miss();
           fx.emit({ type: 'splash', coord: c, big: false, side: 'player' });
           fx.emit({ type: 'marker', coord: c, outcome: 'miss', side: 'player' });
-          set({ lastOutcome: { by: 'ai', text: 'Enemy missed', seq: match.log.length } });
+          set({ lastOutcome: { by: 'ai', text: "Legacy's build failed", seq: match.log.length } });
         } else {
           audio.hit();
           fx.emit({ type: 'explosion', coord: c, side: 'player' });
           fx.emit({ type: 'marker', coord: c, outcome: 'hit', side: 'player' });
           const shipName = 'shipId' in ev.outcome ? shipSpec(ev.outcome.shipId).name : '';
           if (ev.outcome.kind === 'sunk' || ev.outcome.kind === 'win') {
-            setTimeout(() => audio.sink(), 450);
+            setTimeout(() => {
+              audio.sink();
+              fx.emit({ type: 'sink', coord: c, side: 'player' });
+            }, 450);
             set({
-              lastOutcome: { by: 'ai', text: `${shipName} sunk`, seq: match.log.length },
+              lastOutcome: { by: 'ai', text: `Regression in ${shipName}`, seq: match.log.length },
             });
           } else {
-            set({ lastOutcome: { by: 'ai', text: 'Hull breach', seq: match.log.length } });
+            set({ lastOutcome: { by: 'ai', text: `Regression in ${shipName}`, seq: match.log.length } });
           }
         }
         set((s) => ({ matchVersion: s.matchVersion + 1 }));
@@ -225,20 +243,19 @@ export const useGame = create<GameStore>((set, get) => {
           finishIfOver(match);
           return;
         }
-        // hold on the player's board so they can see where the enemy fired,
-        // then flip back to targeting view
         setTimeout(() => {
           if (get().phase !== 'battle') return;
           match.turn = 'player';
-          set({ boardView: 'enemy', aiThinking: false, turnLock: false });
+          set({ aiThinking: false, turnLock: false });
         }, 1600);
-      }, 420);
+      }, MISSILE_FLIGHT_MS);
     }, delay);
   };
 
   return {
     phase: 'menu',
     difficulty: 'officer',
+    commanderId: loadCommander(),
     match: null,
     matchVersion: 0,
     ai: null,
@@ -258,7 +275,23 @@ export const useGame = create<GameStore>((set, get) => {
       set({ phase: 'menu', match: null, stats: null, aiThinking: false, turnLock: false, target: null });
     },
     goHowTo: () => set({ phase: 'howto' }),
-    goDifficulty: () => set({ phase: 'difficulty' }),
+    goDifficulty: () => set({ phase: 'commander' }),
+    goCommander: () => set({ phase: 'commander' }),
+    selectCommander: (id) => {
+      try {
+        localStorage.setItem(COMMANDER_KEY, id);
+      } catch {
+        /* private mode */
+      }
+      set({ commanderId: id, phase: 'difficulty' });
+    },
+    concede: () => {
+      const { match } = get();
+      if (!match || match.winner) return;
+      match.winner = 'ai';
+      set({ target: null, turnLock: true, aiThinking: false });
+      finishIfOver(match);
+    },
 
     startDeploy: (d) => {
       audio.click();
@@ -366,11 +399,12 @@ export const useGame = create<GameStore>((set, get) => {
       if (!s.target || s.turnLock) return;
       set({ turnLock: true });
       audio.fire();
+      fx.emit({ type: 'missile', coord: s.target, side: 'enemy' });
       setTimeout(() => {
         resolvePlayerShot(s.target!);
         // stays locked through the AI turn; scheduleAI unlocks after the
         // board review
-      }, 380);
+      }, MISSILE_FLIGHT_MS);
     },
 
     setBoardView: (v) => {
