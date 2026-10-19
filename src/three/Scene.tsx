@@ -47,10 +47,11 @@ function SceneContent() {
     <>
       <color attach="background" args={[PALETTE.deepSea]} />
       <fog attach="fog" args={[PALETTE.deepSea, 22, 60]} />
-      <ambientLight intensity={0.55} color="#9ecbff" />
-      <directionalLight position={[-6, 12, 6]} intensity={1.15} color="#cfe8ff" />
+      <ambientLight intensity={0.7} color="#9ecbff" />
+      <hemisphereLight args={['#b8d8f0', '#081a2c', 0.5]} />
+      <directionalLight position={[-6, 12, 6]} intensity={1.35} color="#cfe8ff" />
       <pointLight position={[6, 4, -4]} intensity={6} color={PALETTE.accentSoft} distance={20} />
-      <Ocean amp={reducedMotion ? 0.1 : 0.28} caustics={low ? 0.2 : 0.55} segments={low ? 48 : 96} />
+      <Ocean amp={reducedMotion ? 0.08 : 0.16} caustics={low ? 0.12 : 0.22} segments={low ? 48 : 96} />
       <BoardScene />
       <CameraRig />
       {!low && (

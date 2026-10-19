@@ -45,13 +45,13 @@ const FRAG = /* glsl */ `
   varying vec3 vNormalW;
   varying float vElev;
 
-  // Layered sine interference — cheap bounded caustic shimmer.
+  // Layered sine interference — cheap bounded shimmer, kept fine-grained.
   float caustic(vec2 p, float t) {
     float v = 0.0;
     v += sin(p.x * 1.9 + t * 1.1) * sin(p.y * 1.4 - t * 0.8);
     v += sin((p.x + p.y) * 2.6 - t * 1.3) * 0.6;
     v += sin(p.x * 0.8 - p.y * 1.1 + t * 0.6) * 0.4;
-    return smoothstep(0.55, 1.05, v) * 0.9;
+    return smoothstep(0.85, 1.25, v);
   }
 
   void main() {
@@ -59,17 +59,17 @@ const FRAG = /* glsl */ `
     vec3 viewDir = normalize(cameraPosition - vWorld);
     vec3 lightDir = normalize(vec3(-0.35, 0.8, 0.45));
 
-    float fres = pow(1.0 - max(dot(viewDir, n), 0.0), 3.0);
-    float elevMix = smoothstep(-0.8, 1.2, vElev);
-    vec3 col = mix(uDeep, uShallow, elevMix * 0.55);
+    float fres = pow(1.0 - max(dot(viewDir, n), 0.0), 4.0);
+    float elevMix = smoothstep(-0.9, 1.0, vElev);
+    vec3 col = mix(uDeep, uShallow, elevMix * 0.5);
 
-    float spec = pow(max(dot(reflect(-lightDir, n), viewDir), 0.0), 60.0);
-    col += spec * vec3(0.55, 0.8, 0.9) * 0.6;
+    float spec = pow(max(dot(reflect(-lightDir, n), viewDir), 0.0), 90.0);
+    col += spec * vec3(0.55, 0.8, 0.9) * 0.35;
 
-    float ca = caustic(vWorld.xz * 0.35, uTime * 0.6);
+    float ca = caustic(vWorld.xz * 1.6, uTime * 0.45);
     col += ca * uAccent * uCaustics;
 
-    col += fres * uAccent * 0.28;
+    col += fres * uAccent * 0.12;
 
     // distance fog into the abyss
     float d = distance(cameraPosition, vWorld);
@@ -80,7 +80,7 @@ const FRAG = /* glsl */ `
   }
 `;
 
-export function Ocean({ amp = 0.28, caustics = 0.5, segments = 96 }: { amp?: number; caustics?: number; segments?: number }) {
+export function Ocean({ amp = 0.16, caustics = 0.22, segments = 96 }: { amp?: number; caustics?: number; segments?: number }) {
   const mat = useRef<THREE.ShaderMaterial>(null);
   const uniforms = useMemo(
     () => ({
