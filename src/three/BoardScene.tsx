@@ -6,7 +6,16 @@ import { GRID_SIZE, shipSpec } from '../game/types';
 import type { Coord } from '../game/types';
 import { shipCellsFor, canPlace } from '../game/board';
 import { useGame } from '../state/store';
-import { BOARD_HALF, cellToWorld, PALETTE, worldToCell, PLAYER_BOARD_POS, ENEMY_BOARD_POS } from './config';
+import {
+  BOARD_HALF,
+  cellToWorld,
+  ENEMY_BOARD_POS,
+  LEGACY_MONOLITH_POSITION,
+  LEGACY_MONOLITH_SCALE,
+  PALETTE,
+  PLAYER_BOARD_POS,
+  worldToCell,
+} from './config';
 import { GridPlane } from './GridPlane';
 import { MarkerField } from './Markers';
 import { ShipMesh } from './ShipMesh';
@@ -201,7 +210,7 @@ export function BoardScene() {
           {/* Battleship "laptop": your fleet in front, enemy waters behind */}
           <BoardGroup position={PLAYER_BOARD_POS} board={match.player} version={matchVersion} side="player" />
           <BoardGroup position={ENEMY_BOARD_POS} board={match.enemy} version={matchVersion} side="enemy" />
-          <LegacyMonolith position={[0, 0, -13.1]} />
+          <LegacyMonolith position={LEGACY_MONOLITH_POSITION} scale={LEGACY_MONOLITH_SCALE} />
         </>
       ) : (
         <BoardGroup position={[0, 0, 0]} board={deploy.board} version={matchVersion} side="player" />

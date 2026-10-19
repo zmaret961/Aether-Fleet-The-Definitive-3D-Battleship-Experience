@@ -5,8 +5,8 @@ import { useGame } from '../state/store';
 
 function makeFaceTexture() {
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 128;
+  canvas.width = 320;
+  canvas.height = 160;
   const context = canvas.getContext('2d');
   if (!context) return new THREE.CanvasTexture(canvas);
 
@@ -14,30 +14,74 @@ function makeFaceTexture() {
   context.fillStyle = '#06150d';
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.fillStyle = '#0b2718';
-  context.fillRect(5, 5, 246, 118);
+  context.fillRect(6, 6, 308, 148);
 
   context.fillStyle = '#75ff94';
   context.shadowColor = '#55ff7b';
   context.shadowBlur = 14;
-  context.fillRect(35, 30, 48, 8);
-  context.fillRect(43, 38, 40, 8);
-  context.fillRect(51, 46, 32, 8);
-  context.fillRect(173, 30, 48, 8);
-  context.fillRect(173, 38, 40, 8);
-  context.fillRect(173, 46, 32, 8);
-  context.fillRect(91, 88, 74, 7);
-  context.fillRect(83, 95, 24, 7);
-  context.fillRect(149, 95, 24, 7);
-  context.fillRect(107, 102, 42, 7);
-  context.shadowBlur = 0;
+  context.lineWidth = 11;
+  context.lineCap = 'square';
+  context.beginPath();
+  context.moveTo(38, 39);
+  context.lineTo(104, 56);
+  context.moveTo(282, 39);
+  context.lineTo(216, 56);
+  context.stroke();
+  context.fillRect(50, 60, 48, 21);
+  context.fillRect(63, 67, 16, 14);
+  context.fillRect(222, 60, 48, 21);
+  context.fillRect(239, 67, 16, 14);
+
+  context.beginPath();
+  context.moveTo(79, 101);
+  context.lineTo(105, 108);
+  context.lineTo(122, 96);
+  context.lineTo(145, 108);
+  context.lineTo(166, 96);
+  context.lineTo(187, 108);
+  context.lineTo(209, 96);
+  context.lineTo(239, 101);
+  context.lineTo(229, 137);
+  context.lineTo(208, 130);
+  context.lineTo(187, 142);
+  context.lineTo(166, 130);
+  context.lineTo(145, 142);
+  context.lineTo(123, 130);
+  context.lineTo(102, 140);
+  context.lineTo(87, 130);
+  context.closePath();
+  context.fill();
+  context.strokeStyle = '#caffd4';
+  context.lineWidth = 4;
+  context.stroke();
 
   context.fillStyle = '#d8ffe0';
-  context.fillRect(59, 39, 12, 10);
-  context.fillRect(185, 39, 12, 10);
-  context.fillRect(91, 88, 74, 3);
+  context.beginPath();
+  context.moveTo(96, 106);
+  context.lineTo(112, 110);
+  context.lineTo(123, 102);
+  context.lineTo(136, 110);
+  context.lineTo(150, 103);
+  context.lineTo(165, 111);
+  context.lineTo(179, 103);
+  context.lineTo(193, 111);
+  context.lineTo(208, 102);
+  context.lineTo(222, 106);
+  context.lineTo(216, 119);
+  context.lineTo(202, 115);
+  context.lineTo(187, 124);
+  context.lineTo(172, 115);
+  context.lineTo(157, 124);
+  context.lineTo(142, 115);
+  context.lineTo(127, 124);
+  context.lineTo(112, 116);
+  context.lineTo(101, 120);
+  context.closePath();
+  context.fill();
+  context.shadowBlur = 0;
 
   context.fillStyle = 'rgba(138, 255, 170, 0.16)';
-  for (let y = 8; y < 120; y += 6) context.fillRect(6, y, 244, 1);
+  for (let y = 10; y < 152; y += 7) context.fillRect(7, y, 306, 1);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -68,28 +112,42 @@ function makeStatusTexture() {
   return texture;
 }
 
-function CableTentacle({ side, phase }: { side: -1 | 1; phase: number }) {
+function CableTentacle({
+  side,
+  phase,
+  anchorY,
+  reach,
+  depth,
+}: {
+  side: -1 | 1;
+  phase: number;
+  anchorY: number;
+  reach: number;
+  depth: number;
+}) {
   const cable = useRef<THREE.Group>(null);
   const curve = useMemo(() => {
     const points = [
-      new THREE.Vector3(side * 1.75, 1.1, -0.25),
-      new THREE.Vector3(side * 2.35, 0.55, 0.15),
-      new THREE.Vector3(side * 2.9, 0.25, 0.65),
-      new THREE.Vector3(side * 3.1, 0.62, 1.15),
-      new THREE.Vector3(side * 2.8, 0.82, 1.48),
+      new THREE.Vector3(side * 1.72, anchorY, -0.25),
+      new THREE.Vector3(side * 2.35, anchorY + 0.22, depth),
+      new THREE.Vector3(side * (reach - 0.65), anchorY - 0.38, depth + 0.6),
+      new THREE.Vector3(side * reach, anchorY - 1.12, depth + 1.35),
+      new THREE.Vector3(side * (reach - 0.35), anchorY - 1.62, depth + 2.0),
+      new THREE.Vector3(side * (reach - 1.0), anchorY - 1.0, depth + 2.25),
     ];
-    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 32, 0.11, 8, false);
-  }, [side]);
+    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 48, 0.22, 10, false);
+  }, [anchorY, depth, reach, side]);
   const material = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: '#263c47', metalness: 0.72, roughness: 0.32 }),
+    () => new THREE.MeshStandardMaterial({ color: '#253e49', metalness: 0.66, roughness: 0.3 }),
     [],
   );
 
   useFrame((_, _dt) => {
     if (!cable.current) return;
     const t = performance.now() / 1000;
-    cable.current.rotation.y = Math.sin(t * 1.15 + phase) * 0.09;
-    cable.current.rotation.z = Math.sin(t * 0.8 + phase) * 0.045 * side;
+    cable.current.rotation.y = Math.sin(t * 1.15 + phase) * 0.14;
+    cable.current.rotation.z = Math.sin(t * 0.8 + phase) * 0.085 * side;
+    cable.current.position.y = Math.sin(t * 1.4 + phase) * 0.09;
   });
 
   useEffect(
@@ -103,15 +161,25 @@ function CableTentacle({ side, phase }: { side: -1 | 1; phase: number }) {
   return (
     <group ref={cable}>
       <mesh geometry={curve} material={material} />
-      <mesh position={[side * 2.8, 0.82, 1.48]}>
-        <sphereGeometry args={[0.18, 12, 8]} />
-        <meshStandardMaterial color="#98a69a" metalness={0.8} roughness={0.25} />
+      <mesh position={[side * (reach - 1.0), anchorY - 1.0, depth + 2.25]}>
+        <sphereGeometry args={[0.28, 14, 10]} />
+        <meshStandardMaterial color="#b6c4b5" metalness={0.82} roughness={0.22} emissive="#30443a" />
+      </mesh>
+      <mesh position={[side * 1.82, anchorY, -0.2]} rotation={[0, 0, Math.PI / 2]}>
+        <torusGeometry args={[0.28, 0.075, 8, 16]} />
+        <meshStandardMaterial color="#c4b99c" metalness={0.8} roughness={0.25} />
       </mesh>
     </group>
   );
 }
 
-export function LegacyMonolith({ position }: { position: [number, number, number] }) {
+export function LegacyMonolith({
+  position,
+  scale,
+}: {
+  position: [number, number, number];
+  scale: [number, number, number];
+}) {
   const group = useRef<THREE.Group>(null);
   const indicators = useRef<(THREE.Mesh | null)[]>([]);
   const lastOutcome = useGame((s) => s.lastOutcome);
@@ -175,7 +243,8 @@ export function LegacyMonolith({ position }: { position: [number, number, number
   const visible = phase === 'battle' || phase === 'over';
 
   return (
-    <group ref={group} position={position} visible={visible}>
+    <group position={position} scale={scale} visible={visible}>
+      <group ref={group}>
       <pointLight position={[0, 4.7, 3.8]} intensity={12} color="#ffd69a" distance={16} />
       <pointLight position={[0, 4.4, -1.8]} intensity={10} color="#70eaff" distance={13} />
 
@@ -234,10 +303,11 @@ export function LegacyMonolith({ position }: { position: [number, number, number
         </mesh>
       ))}
 
-      <CableTentacle side={-1} phase={0.2} />
-      <CableTentacle side={-1} phase={2.3} />
-      <CableTentacle side={1} phase={1.1} />
-      <CableTentacle side={1} phase={3.4} />
+      <CableTentacle side={-1} phase={0.2} anchorY={1.65} reach={4.2} depth={-0.1} />
+      <CableTentacle side={-1} phase={2.3} anchorY={0.45} reach={3.7} depth={0.55} />
+      <CableTentacle side={1} phase={1.1} anchorY={1.5} reach={4.4} depth={0.25} />
+      <CableTentacle side={1} phase={3.4} anchorY={0.55} reach={3.8} depth={-0.35} />
+      </group>
     </group>
   );
 }

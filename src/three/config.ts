@@ -20,6 +20,8 @@ export const worldToCell = (wx: number, wz: number): Coord | null => {
 // the Battleship "laptop" opened on the table.
 export const PLAYER_BOARD_POS: [number, number, number] = [0, 0, 5.7];
 export const ENEMY_BOARD_POS: [number, number, number] = [0, 0, -5.7];
+export const LEGACY_MONOLITH_POSITION: [number, number, number] = [0, 1.3, -13.5];
+export const LEGACY_MONOLITH_SCALE: [number, number, number] = [1.7, 1.35, 1.6];
 
 export const PALETTE = {
   deepSea: '#04101e',

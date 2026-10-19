@@ -16,15 +16,22 @@ function CameraRig() {
   useFrame((_, dt) => {
     t.current += dt;
     const menuLike = phase === 'menu' || phase === 'commander' || phase === 'difficulty' || phase === 'howto';
+    const battleLike = phase === 'battle' || phase === 'over';
+    const perspectiveCamera = camera as THREE.PerspectiveCamera;
+    const fov = battleLike ? 39 : 48;
+    if (perspectiveCamera.fov !== fov) {
+      perspectiveCamera.fov = fov;
+      perspectiveCamera.updateProjectionMatrix();
+    }
     const base = menuLike
       ? new THREE.Vector3(Math.sin(t.current * 0.08) * 4, 13.5, 12 + Math.cos(t.current * 0.08) * 2)
       : phase === 'deploy'
         ? new THREE.Vector3(0, 13.2, 11.4)
-      : new THREE.Vector3(0, 22, 22);
-    base.x += pointer.x * 0.7;
-    base.y += pointer.y * 0.4;
+      : new THREE.Vector3(0, 9, 28);
+    base.x += pointer.x * (battleLike ? 0.25 : 0.7);
+    base.y += pointer.y * (battleLike ? 0.15 : 0.4);
     camera.position.lerp(base, 0.045);
-    camera.lookAt(0, 0, phase === 'deploy' || menuLike ? 0 : -0.5);
+    camera.lookAt(0, battleLike ? 1.2 : 0, phase === 'deploy' || menuLike ? 0 : -0.8);
   });
   return null;
 }
