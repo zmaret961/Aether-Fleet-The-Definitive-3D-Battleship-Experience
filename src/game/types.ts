@@ -13,13 +13,62 @@ export interface ShipSpec {
   length: number;
 }
 
+export interface CommanderProfile {
+  id: string;
+  name: string;
+  role: string;
+  tagline: string;
+  initials: string;
+}
+
+export const COMMANDERS = [
+  {
+    id: 'scott-wu',
+    name: 'Scott Wu',
+    role: 'CEO',
+    tagline: 'Competitive-programming champion. Calculates every shot.',
+    initials: 'SW',
+  },
+  {
+    id: 'chris-degnan',
+    name: 'Chris Degnan',
+    role: 'CRO',
+    tagline: 'Closes every deal — and every ticket.',
+    initials: 'CD',
+  },
+  {
+    id: 'jeff-wang',
+    name: 'Jeff Wang',
+    role: 'President, New Enterprise · ex-Windsurf CEO',
+    tagline: 'Rides the Windsurf wave into enemy waters.',
+    initials: 'JW',
+  },
+  {
+    id: 'will-mccarthy',
+    name: 'Will McCarthy',
+    role: 'Emerging Enterprise Leader',
+    tagline: 'Leads the charge on every new account.',
+    initials: 'WM',
+  },
+] as const satisfies readonly CommanderProfile[];
+
+export type CommanderId = (typeof COMMANDERS)[number]['id'];
+
 export const FLEET: ShipSpec[] = [
-  { id: 'carrier', name: 'Carrier', length: 5 },
-  { id: 'battleship', name: 'Battleship', length: 4 },
-  { id: 'cruiser', name: 'Cruiser', length: 3 },
-  { id: 'submarine', name: 'Submarine', length: 3 },
-  { id: 'destroyer', name: 'Destroyer', length: 2 },
+  { id: 'carrier', name: 'Devin', length: 5 },
+  { id: 'battleship', name: 'Windsurf', length: 4 },
+  { id: 'cruiser', name: 'DeepWiki', length: 3 },
+  { id: 'submarine', name: 'Devin Review', length: 3 },
+  { id: 'destroyer', name: 'Devin Oncall', length: 2 },
 ];
+
+export const ENEMY_FLEET_NAMES: Record<string, string> = {
+  carrier: 'Tech Debt',
+  battleship: 'Merge Conflict',
+  cruiser: 'CVE Backlog',
+  submarine: 'Flaky Test',
+  destroyer: 'Stale Jira Ticket',
+};
 
 export const shipSpec = (id: string): ShipSpec => {
   const spec = FLEET.find((s) => s.id === id);

@@ -9,24 +9,24 @@ export const DIFFICULTY_INFO: Record<
   { label: string; tagline: string; description: string }
 > = {
   cadet: {
-    label: 'Cadet',
-    tagline: 'A forgiving opponent',
-    description: 'Learns the basics with you. Mostly random fire with a light instinct to chase hits.',
+    label: 'Flaky Test',
+    tagline: 'Mostly green',
+    description: 'Only fails when someone important is watching.',
   },
   officer: {
-    label: 'Officer',
-    tagline: 'Methodical hunter',
-    description: 'Classic hunt-and-target doctrine with checkerboard sweep patterns.',
+    label: 'Merge Conflict',
+    tagline: 'Nobody owns this branch',
+    description: 'Can resolve anything except its own rebase.',
   },
   commander: {
-    label: 'Commander',
-    tagline: 'Probability tactician',
-    description: 'Computes a live probability density map of your remaining fleet. Strong but beatable.',
+    label: 'CVE Backlog',
+    tagline: 'CVSS 10.0 personality',
+    description: 'Prioritizes every risk. Patches absolutely nothing.',
   },
   admiral: {
-    label: 'Admiral',
-    tagline: 'Nightmare strategist',
-    description: 'Adaptive probability warfare. Relentless target resolution. Genuinely threatening — never cheating.',
+    label: 'The Legacy Monolith',
+    tagline: 'Last touched in 1987',
+    description: 'Compiles at dawn. Nobody knows why it works.',
   },
 };
 

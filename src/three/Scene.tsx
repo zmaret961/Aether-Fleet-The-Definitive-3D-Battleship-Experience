@@ -5,6 +5,7 @@ import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import { useGame } from '../state/store';
 import { BoardScene } from './BoardScene';
+import { EffectsLayer } from './Effects';
 import { Ocean } from './Ocean';
 import { PALETTE } from './config';
 
@@ -14,16 +15,23 @@ function CameraRig() {
   const t = useRef(0);
   useFrame((_, dt) => {
     t.current += dt;
-    const menuLike = phase === 'menu' || phase === 'difficulty' || phase === 'howto';
+    const menuLike = phase === 'menu' || phase === 'commander' || phase === 'difficulty' || phase === 'howto';
+    const battleLike = phase === 'battle' || phase === 'over';
+    const perspectiveCamera = camera as THREE.PerspectiveCamera;
+    const fov = battleLike ? 39 : 48;
+    if (perspectiveCamera.fov !== fov) {
+      perspectiveCamera.fov = fov;
+      perspectiveCamera.updateProjectionMatrix();
+    }
     const base = menuLike
       ? new THREE.Vector3(Math.sin(t.current * 0.08) * 4, 13.5, 12 + Math.cos(t.current * 0.08) * 2)
       : phase === 'deploy'
         ? new THREE.Vector3(0, 13.2, 11.4)
-        : new THREE.Vector3(0, 17.5, 16.5);
-    base.x += pointer.x * 0.7;
-    base.y += pointer.y * 0.4;
+      : new THREE.Vector3(0, 9, 28);
+    base.x += pointer.x * (battleLike ? 0.25 : 0.7);
+    base.y += pointer.y * (battleLike ? 0.15 : 0.4);
     camera.position.lerp(base, 0.045);
-    camera.lookAt(0, 0, phase === 'deploy' || menuLike ? 0 : -1.5);
+    camera.lookAt(0, battleLike ? 1.2 : 0, phase === 'deploy' || menuLike ? 0 : -0.8);
   });
   return null;
 }
@@ -56,6 +64,7 @@ function SceneContent() {
       <directionalLight position={[8, 5, -9]} intensity={0.55} color={PALETTE.accentSoft} />
       <Ocean amp={reducedMotion ? 0.08 : 0.16} caustics={low ? 0.4 : 0.9} segments={low ? 48 : 96} />
       <BoardScene />
+      <EffectsLayer />
       <CameraRig />
       {!low && (
         <EffectComposer multisampling={0}>
@@ -72,7 +81,7 @@ export function Scene() {
       <Canvas
         dpr={[0.8, 2]}
         gl={{ antialias: true, powerPreference: 'high-performance', alpha: false }}
-        camera={{ position: [0, 13.2, 11.4], fov: 42, near: 0.1, far: 120 }}
+        camera={{ position: [0, 13.2, 11.4], fov: 48, near: 0.1, far: 120 }}
       >
         <AdaptiveDpr />
         <Suspense fallback={null}>

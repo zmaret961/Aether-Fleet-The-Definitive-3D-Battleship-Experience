@@ -73,11 +73,21 @@ export interface MatchStats {
   hits: number;
   accuracyPct: number;
   shipsSunk: number;
+  firstSinkTurn: number | null;
   durationSec: number;
 }
 
 export const matchStats = (m: Match, difficulty: Difficulty): MatchStats => {
   const acc = accuracy(m, 'player');
+  let playerTurn = 0;
+  let firstSinkTurn: number | null = null;
+  for (const event of m.log) {
+    if (event.by !== 'player') continue;
+    playerTurn += 1;
+    if (firstSinkTurn === null && (event.outcome.kind === 'sunk' || event.outcome.kind === 'win')) {
+      firstSinkTurn = playerTurn;
+    }
+  }
   return {
     difficulty,
     winner: m.winner ?? 'player',
@@ -85,6 +95,7 @@ export const matchStats = (m: Match, difficulty: Difficulty): MatchStats => {
     hits: acc.hits,
     accuracyPct: acc.pct,
     shipsSunk: m.enemy.ships.filter((s) => s.sunk).length,
+    firstSinkTurn,
     durationSec: Math.max(1, Math.round((Date.now() - m.startedAt) / 1000)),
   };
 };

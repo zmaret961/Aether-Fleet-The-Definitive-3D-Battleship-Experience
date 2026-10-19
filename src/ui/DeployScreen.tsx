@@ -35,7 +35,7 @@ export function DeployScreen() {
       </FadeIn>
 
       <FadeIn delay={0.1} className="pointer-events-auto">
-        <GlassPanel strong className="mx-auto w-full max-w-3xl p-3 sm:p-4">
+        <GlassPanel strong className="glass-opaque mx-auto w-full max-w-3xl p-3 sm:p-4">
           {/* ship tray */}
           <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2">
             {FLEET.map((spec) => {

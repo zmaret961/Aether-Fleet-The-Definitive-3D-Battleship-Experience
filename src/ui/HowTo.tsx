@@ -12,13 +12,12 @@ export function HowTo() {
           <ul className="space-y-3 text-sm text-white/70 leading-relaxed">
             <li>
               <span className="text-accent font-semibold">1 · Deploy.</span> Position your five ships —
-              Carrier (5), Battleship (4), Cruiser (3), Submarine (3), Destroyer (2). Tap a ship in the
-              tray, then tap the water to place it. Use Rotate to flip orientation, or Auto-Deploy for
-              an instant formation.
+              Devin (5), Windsurf (4), DeepWiki (3), Devin Review (3), Devin Oncall (2). Tap a ship
+              in the tray, then tap the water to place it. Use Rotate or Auto-Deploy.
             </li>
             <li>
               <span className="text-accent font-semibold">2 · Engage.</span> Tap a cell on the enemy
-              board to paint a firing solution, then tap FIRE to launch. Tap a different cell to retarget.
+              board to paint a firing solution, then tap FIRE to launch a missile. Tap a different cell to retarget.
             </li>
             <li>
               <span className="text-accent font-semibold">3 · Read the water.</span> Amber markers are
@@ -27,7 +26,7 @@ export function HowTo() {
             </li>
             <li>
               <span className="text-accent font-semibold">4 · Win.</span> Sink all five enemy vessels
-              before the enemy admiral sinks yours. Watch your own waters with the Fleet view toggle.
+              before Legacy closes your tickets. Both boards stay in view while the game plays out.
             </li>
           </ul>
           <div className="mt-6 flex justify-end">

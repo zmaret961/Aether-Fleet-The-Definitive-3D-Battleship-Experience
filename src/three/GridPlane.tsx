@@ -28,10 +28,9 @@ const FRAG = /* glsl */ `
     vec2 d = abs(fract(g + 0.5) - 0.5);
     float line = 1.0 - smoothstep(0.0, 0.06, min(d.x, d.y));
     float pulse = 0.75 + 0.25 * sin(uTime * 0.8 + (vUv.x + vUv.y) * 6.2831);
-    float edge = smoothstep(0.5, 0.42, distance(vUv, vec2(0.5)));
-    float alpha = line * 0.34 * pulse * edge;
+    float alpha = line * 0.34 * pulse;
     // faint panel tint so the board reads as a distinct surface
-    alpha += 0.045 * edge;
+    alpha += 0.045;
     gl_FragColor = vec4(uLine, alpha);
   }
 `;

@@ -8,10 +8,13 @@ export type BoardSide = 'player' | 'enemy';
 
 export type FxEvent =
   | { type: 'sonar'; coord: Coord; side: BoardSide }
+  | { type: 'missile'; coord: Coord; side: BoardSide }
   | { type: 'splash'; coord: Coord; big?: boolean; side: BoardSide }
   | { type: 'explosion'; coord: Coord; side: BoardSide }
   | { type: 'sink'; coord: Coord; side: BoardSide }
   | { type: 'marker'; coord: Coord; outcome: 'miss' | 'hit'; side: BoardSide };
+
+export const MISSILE_FLIGHT_MS = 720;
 
 type Handler = (e: FxEvent) => void;
 
