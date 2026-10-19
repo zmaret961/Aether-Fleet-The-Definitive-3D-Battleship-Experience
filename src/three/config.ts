@@ -24,7 +24,7 @@ export const PALETTE = {
   hit: '#f59e0b',
   hitHot: '#fbbf24',
   miss: '#dbeafe',
-  hull: '#2a3b4d',
-  hullDark: '#141d28',
+  hull: '#556e85',
+  hullDark: '#2c3c4e',
   enemy: '#fb7185',
 } as const;

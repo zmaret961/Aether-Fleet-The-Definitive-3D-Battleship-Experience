@@ -51,14 +51,18 @@ export function ShipMesh({ ship, ghost = false, valid = true }: { ship: PlacedSh
       })
     : new THREE.MeshStandardMaterial({
         color: PALETTE.hull,
-        metalness: 0.85,
-        roughness: 0.35,
+        metalness: 0.35,
+        roughness: 0.55,
+        emissive: '#0d1a26',
+        emissiveIntensity: 0.35,
         transparent: ship.sunk,
       });
   const deckMat = new THREE.MeshStandardMaterial({
     color: ghost ? (valid ? PALETTE.accentSoft : PALETTE.enemy) : PALETTE.hullDark,
-    metalness: 0.7,
-    roughness: 0.5,
+    metalness: 0.3,
+    roughness: 0.6,
+    emissive: '#0a141d',
+    emissiveIntensity: 0.3,
     transparent: ghost || ship.sunk,
     opacity: ghost ? 0.5 : 1,
   });
