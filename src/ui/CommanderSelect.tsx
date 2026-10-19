@@ -47,7 +47,7 @@ export function CommanderSelect() {
       <FadeIn delay={0.32} className="mt-6 pointer-events-auto sm:absolute sm:bottom-20 sm:mt-0">
         <GlassButton onClick={goMenu}>Back</GlassButton>
       </FadeIn>
-      <GlassPanel className="absolute bottom-4 hidden px-4 py-2 sm:block">
+      <GlassPanel className="absolute top-5 hidden px-4 py-2 sm:block">
         <span className="label-caps !text-[0.55rem] !tracking-[0.15em]">Cognition field exercise · Devin-powered</span>
       </GlassPanel>
     </div>
