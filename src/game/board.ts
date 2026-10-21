@@ -35,6 +35,7 @@ export const canPlace = (board: Board, origin: Coord, orientation: Orientation, 
 };
 
 export const placeShip = (board: Board, spec: ShipSpec, origin: Coord, orientation: Orientation): boolean => {
+  if (spec.length < 1 || board.ships.some((ship) => ship.spec.id === spec.id)) return false;
   if (!canPlace(board, origin, orientation, spec.length)) return false;
   const cells = shipCellsFor(origin, orientation, spec.length);
   for (const c of cells) board.shipAt[c.y][c.x] = spec.id;
@@ -84,8 +85,12 @@ export const fireAt = (board: Board, c: Coord): ShotOutcome => {
     board.marks[c.y][c.x] = 'miss';
     return { kind: 'miss' };
   }
+  const ship = board.ships.find((s) => s.spec.id === shipId);
+  if (!ship) {
+    board.marks[c.y][c.x] = 'miss';
+    return { kind: 'miss' };
+  }
   board.marks[c.y][c.x] = 'hit';
-  const ship = board.ships.find((s) => s.spec.id === shipId)!;
   ship.hits += 1;
   if (ship.hits >= ship.spec.length) {
     ship.sunk = true;
@@ -96,15 +101,82 @@ export const fireAt = (board: Board, c: Coord): ShotOutcome => {
 
 /** Deterministic random fleet layout using the provided rng. */
 export const randomLayout = (rng: Rng): Board => {
-  const board = createBoard();
-  // Largest first keeps placement fast and reliable.
-  for (const spec of [...FLEET].sort((a, b) => b.length - a.length)) {
-    const placements = allPlacements(board.shipAt, spec.length);
-    const pick = placements[Math.floor(rng() * placements.length)];
-    board.ships.push({ spec, cells: pick.cells, hits: 0, sunk: false });
-    for (const c of pick.cells) board.shipAt[c.y][c.x] = spec.id;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const board = createBoard();
+    let failed = false;
+    for (const spec of [...FLEET].sort((a, b) => b.length - a.length)) {
+      const placements = allPlacements(board.shipAt, spec.length);
+      if (placements.length === 0) {
+        failed = true;
+        break;
+      }
+      const pick = placements[Math.floor(rng() * placements.length)];
+      board.ships.push({ spec, cells: pick.cells, hits: 0, sunk: false });
+      for (const c of pick.cells) board.shipAt[c.y][c.x] = spec.id;
+    }
+    if (!failed) return board;
   }
-  return board;
+  throw new Error('Unable to generate a valid fleet layout after 50 attempts');
+};
+
+export const validateFleet = (board: Board): string[] => {
+  const errors: string[] = [];
+  const expectedById = new Map(FLEET.map((spec) => [spec.id, spec]));
+  const shipsById = new Map<string, PlacedShip[]>();
+  const expectedAt = Array.from({ length: GRID_SIZE }, () => Array<string | null>(GRID_SIZE).fill(null));
+
+  for (const ship of board.ships) {
+    const id = ship.spec.id;
+    const ships = shipsById.get(id) ?? [];
+    ships.push(ship);
+    shipsById.set(id, ships);
+    if (!expectedById.has(id)) errors.push(`Unknown ship id: ${id}`);
+    if (ship.cells.length !== ship.spec.length) errors.push(`Invalid cell count for ${id}`);
+
+    const validCells = ship.cells.filter(inBounds);
+    if (validCells.length !== ship.cells.length) errors.push(`Out-of-bounds cell for ${id}`);
+    const uniqueCells = new Set(ship.cells.filter(inBounds).map(coordKey));
+    if (uniqueCells.size !== validCells.length) errors.push(`Duplicate cell for ${id}`);
+
+    if (validCells.length === ship.cells.length && validCells.length > 0) {
+      const sameX = validCells.every((cell) => cell.x === validCells[0].x);
+      const sameY = validCells.every((cell) => cell.y === validCells[0].y);
+      const positions = sameX
+        ? validCells.map((cell) => cell.y).sort((a, b) => a - b)
+        : sameY
+          ? validCells.map((cell) => cell.x).sort((a, b) => a - b)
+          : [];
+      const contiguous =
+        positions.length === validCells.length &&
+        positions.every((position, index) => index === 0 || position === positions[index - 1] + 1);
+      if (!contiguous) errors.push(`Non-contiguous cells for ${id}`);
+    }
+
+    for (const cell of validCells) {
+      const existing = expectedAt[cell.y][cell.x];
+      if (existing !== null && existing !== id) errors.push(`Overlapping ships at ${coordKey(cell)}`);
+      expectedAt[cell.y][cell.x] = id;
+      if (board.shipAt[cell.y]?.[cell.x] !== id) errors.push(`shipAt mismatch for ${id}`);
+    }
+  }
+
+  for (const spec of FLEET) {
+    const ships = shipsById.get(spec.id) ?? [];
+    if (ships.length === 0) errors.push(`Missing ship: ${spec.id}`);
+    if (ships.length > 1) errors.push(`Duplicate ship: ${spec.id}`);
+    for (const ship of ships) {
+      if (ship.spec.length !== spec.length) errors.push(`Invalid specification for ${spec.id}`);
+    }
+  }
+
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      if ((board.shipAt[y]?.[x] ?? null) !== expectedAt[y][x]) {
+        errors.push(`Unexpected shipAt value at ${coordKey({ x, y })}`);
+      }
+    }
+  }
+  return errors;
 };
 
 export const shipAtCell = (board: Board, c: Coord): PlacedShip | undefined =>
