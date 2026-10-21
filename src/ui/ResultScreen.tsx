@@ -128,7 +128,7 @@ export function ResultScreen() {
               Record vs {DIFFICULTY_INFO[difficulty].label}: <strong className="text-white">{rec ? `${rec.wins}W – ${rec.losses}L` : '—'}</strong>
             </span>
             <div className="flex flex-wrap justify-center gap-2.5">
-              <GlassButton variant="primary" hotkey="Enter" onClick={rematch} autoFocus>
+              <GlassButton variant="primary" hotkey="Enter" onClick={rematch}>
                 Rematch · same fleet
               </GlassButton>
               <GlassButton onClick={playAgain}>Change difficulty</GlassButton>

@@ -15,9 +15,9 @@ const enemyCells = (m: ReturnType<typeof createMatch>) => m.enemy.ships.flatMap(
 describe('match story', () => {
   it('tells a flawless win with first blood, every sink and a final ticket', () => {
     const m = createMatch(fleetBoard(), fleetBoard());
-    for (const c of enemyCells(m)) {
+    for (const [turn, c] of enemyCells(m).entries()) {
       shoot(m, 'player', c);
-      if (!m.winner) shoot(m, 'ai', { x: 9, y: 9 - (m.log.length % 10) });
+      if (!m.winner) shoot(m, 'ai', { x: turn < 10 ? 9 : 8, y: turn % 10 });
     }
     const story = buildStory(m);
     expect(m.winner).toBe('player');
@@ -35,8 +35,12 @@ describe('match story', () => {
     const enemy = enemyCells(m).slice(0, -2); // leave the destroyer afloat
     const playerCells = m.player.ships.flatMap((s) => s.cells);
     const shots = [...misses, ...enemy];
+    const trailingMisses = [
+      ...Array.from({ length: 10 }, (_, y) => ({ x: 8, y })),
+      ...Array.from({ length: 7 }, (_, y) => ({ x: 7, y })),
+    ];
     for (let i = 0; !m.winner; i++) {
-      shoot(m, 'player', shots[i] ?? { x: 8, y: i % 10 });
+      shoot(m, 'player', shots[i] ?? trailingMisses[i - shots.length]);
       const aiMiss = { x: 6 + (i % 4), y: Math.floor(i / 4) };
       if (!m.winner) shoot(m, 'ai', i < shots.length ? aiMiss : playerCells[i - shots.length]);
     }
