@@ -30,10 +30,12 @@ export function MatchStoryPanel({ story }: { story: MatchStory }) {
           <button
             type="button"
             onClick={() => setSharing(true)}
-            className="glass-interactive btn-ghost inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[0.7rem] font-semibold tracking-wide"
+            className="glass-interactive btn-ghost inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[0.7rem] font-semibold tracking-wide"
+            aria-label="Share field report"
           >
             <ShareIcon />
-            Share field report
+            <span className="max-sm:hidden">Share field report</span>
+            <span className="sm:hidden">Share</span>
           </button>
         </div>
       </div>

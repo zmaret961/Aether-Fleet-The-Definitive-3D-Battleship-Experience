@@ -41,8 +41,8 @@ grid) and renders a Cognition-branded 1200×630 PNG card you can download or sha
 | ![Fleet deployment](docs/screenshots/deploy.png) | ![Field report with session timeline](docs/screenshots/result.png) |
 | **Main menu** | **Pause** |
 | ![Main menu](docs/screenshots/menu.png) | ![Pause overlay](docs/screenshots/pause.png) |
-
-![Shareable field report card, rendered on a canvas in the browser](docs/screenshots/share-card.png)
+| **Finale** | **Share field report** |
+| ![Letterboxed finale: the Legacy Monolith's JOB TERMINATED screen](docs/screenshots/hold.png) | ![Share dialog with the canvas-rendered PNG card](docs/screenshots/share.png) |
 
 ## Play
 

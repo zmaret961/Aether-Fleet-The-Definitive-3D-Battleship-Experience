@@ -51,7 +51,7 @@ export function ResultScreen() {
     <div className="fixed inset-0 flex items-center justify-center overflow-y-auto p-4 pointer-events-none">
       <div className="vignette absolute inset-0" aria-hidden="true" />
       <FadeIn className={`relative pointer-events-auto w-full ${story ? 'max-w-4xl' : 'max-w-3xl'}`}>
-        <GlassPanel strong className="max-h-[calc(100vh-2rem)] overflow-y-auto p-6 sm:p-8">
+        <GlassPanel strong className="max-h-[calc(100vh-2rem)] overflow-x-hidden overflow-y-auto p-6 sm:p-8">
           <div
             className={`pointer-events-none absolute -top-32 left-1/2 h-64 w-[40rem] -translate-x-1/2 rounded-full blur-3xl ${
               won ? 'bg-accent-2/30' : 'bg-danger/20'
@@ -130,16 +130,16 @@ export function ResultScreen() {
             </div>
           )}
 
-          <footer className="sticky -bottom-6 z-10 -mx-6 mt-4 flex flex-col-reverse items-center justify-between gap-3 border-t border-white/10 bg-[#0a1020]/90 px-6 pt-4 pb-6 backdrop-blur-md sm:-bottom-8 sm:-mx-8 sm:flex-row sm:px-8 sm:pb-8">
-            <span className="num text-xs text-white/60">
-              Record vs {DIFFICULTY_INFO[difficulty].label}: <strong className="text-white">{rec ? `${rec.wins}W – ${rec.losses}L` : '—'}</strong>
+          <footer className="sticky -bottom-6 z-10 -mx-6 mt-4 flex flex-col-reverse items-center justify-between gap-2.5 border-t border-white/10 bg-[#0a1020]/90 px-6 pt-3 pb-4 sm:gap-3 sm:pt-4 backdrop-blur-md sm:-bottom-8 sm:-mx-8 sm:flex-row sm:px-8 sm:pb-8">
+            <span className="num whitespace-nowrap text-xs text-white/60" title={`Record vs ${DIFFICULTY_INFO[difficulty].label}`}>
+              Record <strong className="text-white">{rec ? `${rec.wins}W – ${rec.losses}L` : '—'}</strong>
             </span>
-            <div className="flex flex-wrap justify-center gap-2.5">
-              <GlassButton variant="primary" hotkey="Enter" onClick={rematch}>
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-nowrap sm:justify-center sm:gap-2.5">
+              <GlassButton variant="primary" hotkey="Enter" onClick={rematch} className="col-span-2">
                 Rematch · same fleet
               </GlassButton>
-              <GlassButton onClick={playAgain}>Change difficulty</GlassButton>
-              <GlassButton hotkey="Esc" onClick={goMenu}>
+              <GlassButton onClick={playAgain} className="whitespace-nowrap max-sm:px-2 max-sm:text-[0.8rem]">Change difficulty</GlassButton>
+              <GlassButton hotkey="Esc" onClick={goMenu} className="whitespace-nowrap max-sm:px-2 max-sm:text-[0.8rem]">
                 Main Menu
               </GlassButton>
             </div>
