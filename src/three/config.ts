@@ -23,8 +23,9 @@ export const ENEMY_BOARD_POS: [number, number, number] = [0, 0, -3.4];
 export const PLAYER_BOARD_SCALE = 0.6;
 export const PLAYER_BOARD_POS: [number, number, number] = [0, 0, ENEMY_BOARD_POS[2] + BOARD_HALF + 1.25 + BOARD_HALF * PLAYER_BOARD_SCALE];
 export const ENEMY_BOARD_SCALE = 1;
-export const LEGACY_MONOLITH_POSITION: [number, number, number] = [0, 1.3, ENEMY_BOARD_POS[2] - BOARD_HALF - 3.1];
-export const LEGACY_MONOLITH_SCALE: [number, number, number] = [1.7, 1.35, 1.6];
+// Keep the FX-tuned boss 3.7 units behind the enemy board's back edge.
+export const LEGACY_MONOLITH_POSITION: [number, number, number] = [0, -0.9, ENEMY_BOARD_POS[2] - BOARD_HALF - 3.7];
+export const LEGACY_MONOLITH_SCALE: [number, number, number] = [1.35, 0.9, 1.2];
 
 export const boardScale = (side: 'player' | 'enemy') => (side === 'player' ? PLAYER_BOARD_SCALE : ENEMY_BOARD_SCALE);
 

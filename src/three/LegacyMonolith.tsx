@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ENEMY_FLEET_NAMES } from '../game/types';
-import { fx } from '../state/fx';
-import type { FxEvent } from '../state/fx';
+import { BOSS_DEFEAT_MS, BOSS_VICTORY_MS, fx } from '../state/fx';
+import type { BossMood, FxEvent } from '../state/fx';
 import { useGame } from '../state/store';
 import { Burst } from './Effects';
-import { addTrauma, fxNow, SMOKE, SPARKS, FIREBALL, shipAt } from './fxKit';
+import { addTrauma, BOSS_POD_LOCAL, fxNow, realNow, SMOKE, SPARKS, FIREBALL, shipAt, WATER_COLUMN, WATER_CROWN } from './fxKit';
 import type { BurstSpec } from './fxKit';
 
 // ------------------------------------------------------------------ personality
 
-export type Mood = 'smug' | 'laugh' | 'hurt' | 'rage' | 'gloat' | 'charge' | 'dead' | 'victory';
+export type Mood = BossMood;
 
 const pick = <T,>(xs: readonly T[]) => xs[Math.floor(Math.random() * xs.length)];
 
@@ -317,21 +317,22 @@ function drawBubble(c: CanvasRenderingContext2D, text: string, mood: Mood) {
   c.clearRect(0, 0, W, H);
   const accent = mood === 'rage' ? '#ff5b4d' : mood === 'hurt' ? '#ffc14d' : mood === 'dead' ? '#9fb4ff' : '#75ff94';
   const r = 26;
-  const x0 = 8;
+  // the balloon sits to the boss's right, so its pointer is on the left
+  const x0 = 52;
   const y0 = 8;
-  const x1 = W - 52;
+  const x1 = W - 8;
   const y1 = H - 40;
   c.beginPath();
   c.moveTo(x0 + r, y0);
   c.lineTo(x1 - r, y0);
   c.quadraticCurveTo(x1, y0, x1, y0 + r);
-  c.lineTo(x1, y1 - 70);
-  c.lineTo(W - 6, y1 - 30); // pointer
-  c.lineTo(x1, y1 - 34);
   c.lineTo(x1, y1 - r);
   c.quadraticCurveTo(x1, y1, x1 - r, y1);
   c.lineTo(x0 + r, y1);
   c.quadraticCurveTo(x0, y1, x0, y1 - r);
+  c.lineTo(x0, y1 - 34);
+  c.lineTo(6, y1 - 12); // pointer
+  c.lineTo(x0, y1 - 70);
   c.lineTo(x0, y0 + r);
   c.quadraticCurveTo(x0, y0, x0 + r, y0);
   c.closePath();
@@ -373,34 +374,43 @@ interface Motion {
   droop: number;
 }
 
+type V3 = [number, number, number];
+
+/**
+ * A bundled cable arm. `points` are boss-local; the arms reach out and forward
+ * along the outside of the enemy grid, so they frame it without covering cells.
+ * The whole arm pivots about its shoulder, so sway stays small at the tip.
+ */
 function CableTentacle({
   side,
   phase,
-  anchorY,
-  reach,
-  depth,
+  points,
+  radius,
+  tip,
   motion,
 }: {
   side: -1 | 1;
   phase: number;
-  anchorY: number;
-  reach: number;
-  depth: number;
+  points: V3[];
+  radius: number;
+  tip: 'plug' | 'dive';
   motion: { current: Motion };
 }) {
   const cable = useRef<THREE.Group>(null);
   const clock = useRef(0);
-  const curve = useMemo(() => {
-    const points = [
-      new THREE.Vector3(side * 1.72, anchorY, -0.25),
-      new THREE.Vector3(side * 2.35, anchorY + 0.22, depth),
-      new THREE.Vector3(side * (reach - 0.65), anchorY - 0.38, depth + 0.6),
-      new THREE.Vector3(side * reach, anchorY - 1.12, depth + 1.35),
-      new THREE.Vector3(side * (reach - 0.35), anchorY - 1.62, depth + 2.0),
-      new THREE.Vector3(side * (reach - 1.0), anchorY - 1.0, depth + 2.25),
-    ];
-    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 48, 0.22, 10, false);
-  }, [anchorY, depth, reach, side]);
+  const anchor = useMemo(() => new THREE.Vector3(side * points[0][0], points[0][1], points[0][2]), [points, side]);
+  const kit = useMemo(() => {
+    const curve = new THREE.CatmullRomCurve3(points.map((q) => new THREE.Vector3(side * q[0], q[1], q[2]).sub(anchor)));
+    const tube = new THREE.TubeGeometry(curve, 64, radius, 10, false);
+    const collars = [0.3, 0.52, 0.74].map((u) => {
+      const at = curve.getPointAt(u);
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), curve.getTangentAt(u));
+      return { at, q };
+    });
+    const end = curve.getPointAt(1);
+    const endQ = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), curve.getTangentAt(1));
+    return { tube, collars, end, endQ };
+  }, [anchor, points, radius, side]);
   const material = useMemo(
     () => new THREE.MeshStandardMaterial({ color: '#2c4a57', metalness: 0.4, roughness: 0.38 }),
     [],
@@ -411,35 +421,76 @@ function CableTentacle({
     const { ag, droop } = motion.current;
     clock.current += dt * (1 + ag * 3.2);
     const t = clock.current;
-    const amp = 1 + ag * 2.2;
-    cable.current.rotation.y = Math.sin(t * 1.15 + phase) * 0.14 * amp;
-    cable.current.rotation.z = Math.sin(t * 0.8 + phase) * 0.085 * side * amp - droop * 0.5 * side;
-    cable.current.rotation.x = droop * 0.35;
-    cable.current.position.y = Math.sin(t * 1.4 + phase) * 0.09 * amp - droop * 0.6;
+    const amp = 1 + ag * 1.6;
+    cable.current.rotation.y = Math.sin(t * 1.15 + phase) * 0.035 * amp * side;
+    cable.current.rotation.z = Math.sin(t * 0.8 + phase) * 0.03 * side * amp - droop * 0.25 * side;
+    cable.current.rotation.x = Math.sin(t * 1.4 + phase) * 0.025 * amp + droop * 0.18;
   });
 
   useEffect(
     () => () => {
-      curve.dispose();
+      kit.tube.dispose();
       material.dispose();
     },
-    [curve, material],
+    [kit, material],
   );
 
   return (
-    <group ref={cable}>
-      <mesh geometry={curve} material={material} />
-      <mesh position={[side * (reach - 1.0), anchorY - 1.0, depth + 2.25]}>
-        <sphereGeometry args={[0.28, 14, 10]} />
-        <meshStandardMaterial color="#b6c4b5" metalness={0.4} roughness={0.3} emissive="#30443a" />
-      </mesh>
-      <mesh position={[side * 1.82, anchorY, -0.2]} rotation={[0, 0, Math.PI / 2]}>
-        <torusGeometry args={[0.28, 0.075, 8, 16]} />
+    <group ref={cable} position={anchor}>
+      <mesh geometry={kit.tube} material={material} />
+      {kit.collars.map((c, i) => (
+        <mesh key={i} position={c.at} quaternion={c.q}>
+          <torusGeometry args={[radius * 1.12, radius * 0.3, 6, 14]} />
+          <meshStandardMaterial color="#c4b99c" metalness={0.4} roughness={0.3} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <torusGeometry args={[radius * 1.3, radius * 0.35, 8, 16]} />
         <meshStandardMaterial color="#c4b99c" metalness={0.4} roughness={0.3} />
       </mesh>
+      {tip === 'plug' ? (
+        <group position={kit.end} quaternion={kit.endQ}>
+          {/* a fat legacy connector jacked into nothing */}
+          <mesh position={[0, 0.12, 0]}>
+            <boxGeometry args={[radius * 2.6, 0.42, radius * 2.1]} />
+            <meshStandardMaterial color="#b6c4b5" metalness={0.35} roughness={0.35} />
+          </mesh>
+          {[-1, 0, 1].map((k) => (
+            <mesh key={k} position={[k * radius * 0.7, 0.42, 0]}>
+              <boxGeometry args={[radius * 0.32, 0.2, radius * 0.32]} />
+              <meshStandardMaterial color="#ffd27a" emissive="#ffb347" emissiveIntensity={1.2} toneMapped={false} />
+            </mesh>
+          ))}
+        </group>
+      ) : (
+        <mesh position={[kit.end.x, kit.end.y + 0.02, kit.end.z]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[radius * 1.2, radius * 2.4, 24]} />
+          <meshBasicMaterial color="#dff3ff" transparent opacity={0.32} depthWrite={false} />
+        </mesh>
+      )}
     </group>
   );
 }
+
+// boss-local arm paths (x mirrored per side). With the boss at z=-14.4 the plug
+// tips land just past the grid's back corners and the lower arms dive into the
+// sea alongside the grid's flanks, well outside the |x| <= 5.4 board footprint.
+const UPPER_ARM: V3[] = [
+  [2.3, 4.3, 0.1],
+  [3.3, 4.95, 0.45],
+  [4.45, 4.5, 1.05],
+  [5.2, 3.2, 1.9],
+  [5.5, 2.0, 2.55],
+  [5.42, 1.45, 2.9],
+];
+const LOWER_ARM: V3[] = [
+  [2.3, 1.9, 0.3],
+  [3.4, 2.3, 1.2],
+  [4.6, 1.8, 2.4],
+  [5.2, 1.4, 3.8],
+  [5.3, 1.1, 5.0],
+  [5.22, 0.92, 5.85],
+];
 
 const STEAM: BurstSpec = {
   ...SMOKE,
@@ -463,6 +514,17 @@ const WRECK_SMOKE: BurstSpec = {
   spread: 1.6,
   delay: [0, 2.2],
   colors: ['#2b2420', '#1f2227', '#4a5059'],
+};
+
+const DEFEAT_SMOKE: BurstSpec = { ...WRECK_SMOKE, count: 30, life: [1.2, 1.9], delay: [0, 0.7] };
+const DEFEAT_COLUMN: BurstSpec = { ...WATER_COLUMN, count: 90, up: [5, 8.5], spread: 2.2, life: [1.0, 1.5], size: [0.2, 0.4] };
+const DEFEAT_CROWN: BurstSpec = { ...WATER_CROWN, count: 70, spread: 3.2, speed: [2.5, 5] };
+
+/** Emit a mood change once; audio voices it via the shared fx bus. */
+const setMood = (s: { mood: Mood }, m: Mood) => {
+  if (s.mood === m) return;
+  s.mood = m;
+  fx.emit({ type: 'bossMood', mood: m });
 };
 
 interface BossBurst {
@@ -490,6 +552,8 @@ export function LegacyMonolith({
   const rageLight = useRef<THREE.PointLight>(null);
   const warmLight = useRef<THREE.PointLight>(null);
   const phase = useGame((s) => s.phase);
+  const portrait = useThree((s) => s.size.width < s.size.height);
+  const pods = useRef<(THREE.Mesh | null)[]>([]);
   const motion = useRef<Motion>({ ag: 0, droop: 0 });
   const [bursts, setBursts] = useState<BossBurst[]>([]);
 
@@ -525,6 +589,7 @@ export function LegacyMonolith({
     bubbleKey: '',
     defeatAt: -1,
     victoryAt: -1,
+    endAt: -1,
     match: undefined as unknown,
   });
 
@@ -544,7 +609,7 @@ export function LegacyMonolith({
   const W = useMemo(
     () => ({
       face: [0, 4.05 * scale[1], 1.25 * scale[2]] as [number, number, number],
-      hatch: [0, 5.95 * scale[1], 0.2 * scale[2]] as [number, number, number],
+      pod: [BOSS_POD_LOCAL[0] * scale[0], BOSS_POD_LOCAL[1] * scale[1], BOSS_POD_LOCAL[2] * scale[2]] as [number, number, number],
       inv: [1 / scale[0], 1 / scale[1], 1 / scale[2]] as [number, number, number],
     }),
     [scale],
@@ -552,28 +617,29 @@ export function LegacyMonolith({
 
   useEffect(() => {
     const s = st.current;
-    const say = (text: string, important = false) => {
-      const now = fxNow();
+    const say = (text: string, important = false, dur?: number) => {
+      const now = realNow();
       if (!important && now - s.tauntAt < s.tauntDur * 0.7) return;
       if (s.defeatAt > 0 && text && !important) return;
       s.taunt = text;
       s.tauntAt = now;
-      s.tauntDur = 1.6 + text.length * 0.05;
+      s.tauntDur = dur ?? 1.6 + text.length * 0.05;
       s.nextIdle = now + rnd(11, 16);
     };
     const mood = (m: Mood, dur: number) => {
       if (s.mood === 'dead' || s.mood === 'victory') return;
-      if (s.mood === 'rage' && fxNow() < s.moodUntil && m !== 'rage') return;
-      s.mood = m;
-      s.moodUntil = fxNow() + dur;
+      if (s.mood === 'rage' && realNow() < s.moodUntil && m !== 'rage') return;
+      setMood(s, m);
+      s.moodUntil = realNow() + dur;
     };
     const spawn = (spec: BurstSpec, pos: [number, number, number], delay = 0) => {
       const birth = fxNow() + delay;
       setBursts((cur) => [...cur.filter((b) => fxNow() - b.birth < 6), { id: burstId++, spec, birth, pos }]);
     };
     const onFx = (e: FxEvent) => {
-      const now = fxNow();
-      if (e.type === 'bossMood' || useGame.getState().phase !== 'battle' || s.defeatAt > 0 || s.victoryAt > 0) return;
+      const now = realNow();
+      if (e.type === 'bossMood' || e.type === 'marker') return;
+      if (useGame.getState().phase !== 'battle' || s.defeatAt > 0 || s.victoryAt > 0) return;
       if (e.side === 'enemy') {
         if (e.type === 'explosion') {
           s.flinch = now;
@@ -591,8 +657,8 @@ export function LegacyMonolith({
           const name = ship ? ENEMY_FLEET_NAMES[ship.spec.id] ?? ship.spec.name : undefined;
           say(fill(pick(TAUNTS.rage), name), true);
           addTrauma(0.25);
-          spawn(STEAM, [-2.4 * scale[0] * 0.6, W.hatch[1], W.hatch[2]]);
-          spawn(STEAM, [2.4 * scale[0] * 0.6, W.hatch[1], W.hatch[2]], 0.15);
+          spawn(STEAM, [-W.pod[0], W.pod[1], W.pod[2]]);
+          spawn(STEAM, [W.pod[0], W.pod[1], W.pod[2]], 0.15);
         }
       } else {
         if (e.type === 'missile') {
@@ -623,10 +689,10 @@ export function LegacyMonolith({
   useFrame((_, dt) => {
     if (!group.current) return;
     const s = st.current as typeof st.current & {
-      say?: (t: string, i?: boolean) => void;
+      say?: (t: string, i?: boolean, dur?: number) => void;
       spawn?: (spec: BurstSpec, pos: [number, number, number], delay?: number) => void;
     };
-    const now = fxNow();
+    const now = realNow();
     const game = useGame.getState();
     const reduced = game.settings.reducedMotion ? 0.3 : 1;
     const m = game.match;
@@ -634,9 +700,10 @@ export function LegacyMonolith({
     // new match → reset personality
     if (m !== s.match) {
       s.match = m;
-      s.mood = 'smug';
+      setMood(s, 'smug');
       s.defeatAt = -1;
       s.victoryAt = -1;
+      s.endAt = -1;
       s.flinch = s.laugh = s.rage = s.recoil = -99;
       s.taunt = '';
       s.tauntAt = -99;
@@ -646,30 +713,36 @@ export function LegacyMonolith({
       group.current.rotation.set(0, 0, 0);
       group.current.visible = true;
     }
+    // Defeat: BOSS_DEFEAT_MS (2.5s) from the winning shot. 0.12s BSOD + last
+    // words, 0.15-0.8s cabinet blowouts, 0.85-2.15s it sinks, 1.5s splash, 2.5s done.
     if (m?.winner === 'player' && s.defeatAt < 0) {
-      s.defeatAt = now + 0.25;
+      s.endAt = now;
+      s.defeatAt = now + 0.12;
       s.taunt = '';
       s.tauntAt = -99;
       for (let i = 0; i < 6; i++) {
-        const p: [number, number, number] = [rnd(-3.2, 3.2), rnd(1.5, 7.2), 1.8];
-        s.spawn?.(i % 2 ? BOOM : HIT_SPARKS, p, 0.25 + i * 0.22);
+        const p: [number, number, number] = [rnd(-2.6, 2.6), rnd(1.2, 5.0), 1.7];
+        s.spawn?.(i % 2 ? BOOM : HIT_SPARKS, p, 0.15 + i * 0.13);
       }
-      s.spawn?.(WRECK_SMOKE, [0, 4.5, 1.4], 0.5);
-      s.spawn?.(STEAM, [0, 1.2, 2.4], 1.0);
+      s.spawn?.(DEFEAT_SMOKE, [0, 3.6, 1.4], 0.3);
+      s.spawn?.(DEFEAT_COLUMN, [0, 0.2, 1.6], 1.45);
+      s.spawn?.(DEFEAT_CROWN, [0, 0.2, 1.6], 1.45);
+      s.spawn?.(STEAM, [0, 0.4, 1.8], 1.6);
     }
     if (s.defeatAt > 0 && now >= s.defeatAt && s.mood !== 'dead') {
-      s.mood = 'dead';
+      setMood(s, 'dead');
       addTrauma(0.55 * reduced);
-      s.say?.(pick(TAUNTS.defeat), true);
+      s.say?.(pick(TAUNTS.defeat), true, BOSS_DEFEAT_MS / 1000 - 0.42);
     }
     if (m?.winner === 'ai' && s.victoryAt < 0) {
-      s.victoryAt = now + 0.35;
+      s.endAt = now;
+      s.victoryAt = now + 0.2;
     }
     if (s.victoryAt > 0 && now >= s.victoryAt && s.mood !== 'victory') {
-      s.mood = 'victory';
-      s.say?.(pick(TAUNTS.victory), true);
+      setMood(s, 'victory');
+      s.say?.(pick(TAUNTS.victory), true, BOSS_VICTORY_MS / 1000 - 0.3);
     }
-    if (s.mood !== 'dead' && s.mood !== 'victory' && now > s.moodUntil) s.mood = 'smug';
+    if (s.mood !== 'dead' && s.mood !== 'victory' && now > s.moodUntil) setMood(s, 'smug');
 
     // idle trash talk
     if (game.phase === 'battle' && now > s.nextIdle && s.mood === 'smug') {
@@ -724,15 +797,15 @@ export function LegacyMonolith({
     let droop = 0;
     if (s.defeatAt > 0 && now >= s.defeatAt) {
       const da = now - s.defeatAt;
-      const shake = Math.max(0, 1 - da / 1.3);
+      const shake = Math.max(0, 1 - da / 1.0);
       px += Math.sin(da * 83) * 0.2 * shake * reduced;
       rz += Math.sin(da * 47) * 0.05 * shake * reduced;
-      const k = THREE.MathUtils.smoothstep(da, 0.5, 3.6);
+      const k = THREE.MathUtils.smoothstep(da, 0.73, 2.03);
       g.visible = k < 1;
-      py -= k * 7.8;
-      rx += k * 0.42;
-      rz += k * 0.24;
-      droop = Math.min(1, da / 1.0);
+      py -= k * 7.2;
+      rx += k * 0.32;
+      rz += k * 0.18;
+      droop = Math.min(1, da / 0.8);
     }
     motion.current.droop = droop;
     const agTarget = re > 0 ? 1 : s.mood === 'victory' || le > 0.2 ? 0.55 : s.mood === 'hurt' ? 0.4 : 0;
@@ -759,6 +832,12 @@ export function LegacyMonolith({
       }
     });
 
+    pods.current.forEach((pod) => {
+      const material = pod?.material as THREE.MeshStandardMaterial | undefined;
+      if (!material) return;
+      material.emissiveIntensity = dead ? 0 : 0.7 + ce * 5 + re * (1.5 + Math.sin(t * 24) * 1.2);
+    });
+
     // ---- face + status screens (redrawn only when their content changes)
     const blink = s.mood === 'smug' && t % 4.3 < 0.13;
     const fps = s.mood === 'laugh' || s.mood === 'gloat' || s.mood === 'victory' ? 9 : 4;
@@ -783,7 +862,9 @@ export function LegacyMonolith({
     const b = bubble.current;
     if (b) {
       const age = now - s.tauntAt;
-      const show = !!s.taunt && age >= 0 && age < s.tauntDur && (game.phase === 'battle' || game.phase === 'over');
+      // result screen: only the final defeat/victory line, and only while its sequence plays
+      const inFinale = s.endAt > 0 && now - s.endAt < Math.max(BOSS_DEFEAT_MS, BOSS_VICTORY_MS) / 1000;
+      const show = !!s.taunt && age >= 0 && age < s.tauntDur && (game.phase === 'battle' || (game.phase === 'over' && inFinale));
       b.visible = show;
       if (show) {
         const chars = Math.min(s.taunt.length, Math.floor(age * 42) + 1);
@@ -796,7 +877,7 @@ export function LegacyMonolith({
         const out = Math.max(0, (age - (s.tauntDur - 0.2)) / 0.2);
         const k = popIn(age / 0.4) * (1 - out);
         b.scale.setScalar(Math.max(0.001, k));
-        b.position.y = 8.2 + Math.sin(t * 2.2) * 0.08;
+        b.position.y = (portrait ? 7.1 : 4.85) + Math.sin(t * 2.2) * 0.08;
       }
     }
   });
@@ -867,10 +948,34 @@ export function LegacyMonolith({
           </mesh>
         ))}
 
-        <CableTentacle side={-1} phase={0.2} anchorY={1.65} reach={4.2} depth={-0.1} motion={motion} />
-        <CableTentacle side={-1} phase={2.3} anchorY={0.45} reach={3.7} depth={0.55} motion={motion} />
-        <CableTentacle side={1} phase={1.1} anchorY={1.5} reach={4.4} depth={0.25} motion={motion} />
-        <CableTentacle side={1} phase={3.4} anchorY={0.55} reach={3.8} depth={-0.35} motion={motion} />
+        {/* shoulder missile pods: the boss's shots launch from here */}
+        {([-1, 1] as const).map((sd) => (
+          <group key={`pod-${sd}`} position={[sd * BOSS_POD_LOCAL[0], BOSS_POD_LOCAL[1] - 0.31, BOSS_POD_LOCAL[2]]}>
+            <mesh material={trim}>
+              <boxGeometry args={[1.05, 0.62, 1.15]} />
+            </mesh>
+            {[0, 1, 2, 3].map((k) => (
+              <mesh key={k} position={[(k % 2 ? 0.22 : -0.22), 0.316, (k < 2 ? 0.22 : -0.2)]} rotation={[-Math.PI / 2, 0, 0]}>
+                <circleGeometry args={[0.15, 16]} />
+                <meshBasicMaterial color="#120a08" />
+              </mesh>
+            ))}
+            <mesh
+              ref={(mesh) => {
+                pods.current[sd < 0 ? 0 : 1] = mesh;
+              }}
+              position={[0, 0.05, 0.585]}
+            >
+              <boxGeometry args={[0.82, 0.12, 0.02]} />
+              <meshStandardMaterial color="#3a1410" emissive="#ff5a2a" emissiveIntensity={0.7} toneMapped={false} />
+            </mesh>
+          </group>
+        ))}
+
+        <CableTentacle side={-1} phase={0.2} points={UPPER_ARM} radius={0.2} tip="plug" motion={motion} />
+        <CableTentacle side={-1} phase={2.3} points={LOWER_ARM} radius={0.25} tip="dive" motion={motion} />
+        <CableTentacle side={1} phase={1.1} points={UPPER_ARM} radius={0.2} tip="plug" motion={motion} />
+        <CableTentacle side={1} phase={3.4} points={LOWER_ARM} radius={0.25} tip="dive" motion={motion} />
       </group>
 
       {/* un-scaled space: particles + speech balloon keep true proportions */}
@@ -878,7 +983,7 @@ export function LegacyMonolith({
         {bursts.map((b) => (
           <Burst key={b.id} spec={b.spec} birth={b.birth} position={b.pos} />
         ))}
-        <group ref={bubble} position={[-6.9, 8.2, 1.6]} visible={false}>
+        <group ref={bubble} position={portrait ? [0, 7.1, 1.6] : [6.4, 4.85, 1.6]} visible={false}>
           <mesh renderOrder={20}>
             <planeGeometry args={[5.8, 2.266]} />
             <meshBasicMaterial map={speech.tex} transparent depthTest={false} depthWrite={false} toneMapped={false} />

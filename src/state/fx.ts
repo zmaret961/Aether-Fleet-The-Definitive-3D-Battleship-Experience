@@ -9,6 +9,8 @@ export type BossMood = 'smug' | 'laugh' | 'hurt' | 'rage' | 'gloat' | 'charge' |
 
 export type BossMood = 'smug' | 'laugh' | 'hurt' | 'rage' | 'gloat' | 'charge' | 'dead' | 'victory';
 
+export type BossMood = 'smug' | 'laugh' | 'hurt' | 'rage' | 'gloat' | 'charge' | 'dead' | 'victory';
+
 export type FxEvent =
   | { type: 'sonar'; coord: Coord; side: BoardSide }
   | { type: 'missile'; coord: Coord; side: BoardSide }
@@ -19,6 +21,13 @@ export type FxEvent =
   | { type: 'bossMood'; mood: BossMood };
 
 export const MISSILE_FLIGHT_MS = 720;
+
+/**
+ * Legacy Monolith end-of-match sequences, in real milliseconds measured from
+ * the moment `match.winner` is set. The result screen should wait this long.
+ */
+export const BOSS_DEFEAT_MS = 2500;
+export const BOSS_VICTORY_MS = 2200;
 
 type Handler = (e: FxEvent) => void;
 
