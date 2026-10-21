@@ -11,7 +11,6 @@ import { EasterEggs } from './ui/EasterEggs';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { PauseOverlay } from './ui/PauseOverlay';
 import { useGame } from './state/store';
-import { audio } from './audio/engine';
 import { initAudioDirector } from './audio/director';
 import { FLEET } from './game/types';
 
@@ -24,22 +23,6 @@ export default function App() {
   const highContrast = useGame((s) => s.settings.highContrast);
 
   useEffect(() => initAudioDirector(), []);
-
-  // Audio requires a user gesture; warm the ambient bed on first interaction.
-  useEffect(() => {
-    const kick = () => {
-      audio.startAmbient();
-      audio.setAmbientLevel(0.16);
-      window.removeEventListener('pointerdown', kick);
-      window.removeEventListener('keydown', kick);
-    };
-    window.addEventListener('pointerdown', kick);
-    window.addEventListener('keydown', kick);
-    return () => {
-      window.removeEventListener('pointerdown', kick);
-      window.removeEventListener('keydown', kick);
-    };
-  }, []);
 
   useEffect(() => {
     document.documentElement.classList.toggle('reduced-motion', reducedMotion);

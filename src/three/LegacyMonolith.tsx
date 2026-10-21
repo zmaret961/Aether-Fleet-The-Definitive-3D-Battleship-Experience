@@ -511,6 +511,7 @@ export function LegacyMonolith({
 
   const st = useRef({
     mood: 'smug' as Mood,
+    emittedMood: 'smug' as Mood,
     moodUntil: 0,
     flinch: -99,
     laugh: -99,
@@ -573,7 +574,7 @@ export function LegacyMonolith({
     };
     const onFx = (e: FxEvent) => {
       const now = fxNow();
-      if (useGame.getState().phase !== 'battle' || s.defeatAt > 0 || s.victoryAt > 0) return;
+      if (e.type === 'bossMood' || useGame.getState().phase !== 'battle' || s.defeatAt > 0 || s.victoryAt > 0) return;
       if (e.side === 'enemy') {
         if (e.type === 'explosion') {
           s.flinch = now;
@@ -670,6 +671,10 @@ export function LegacyMonolith({
       s.say?.(pick(TAUNTS.victory), true);
     }
     if (s.mood !== 'dead' && s.mood !== 'victory' && now > s.moodUntil) s.mood = 'smug';
+    if (s.mood !== s.emittedMood) {
+      s.emittedMood = s.mood;
+      if (game.phase === 'battle' || game.phase === 'over') fx.emit({ type: 'bossMood', mood: s.mood });
+    }
 
     // idle trash talk
     if (game.phase === 'battle' && now > s.nextIdle && s.mood === 'smug') {

@@ -30,6 +30,8 @@ export type PerfMode = 'auto' | 'high' | 'low';
 
 export interface Settings {
   volume: number;
+  musicVolume: number;
+  sfxVolume: number;
   muted: boolean;
   reducedMotion: boolean;
   highContrast: boolean;
@@ -65,11 +67,16 @@ const loadRecords = (): Records => {
   }
 };
 
+const level = (v: unknown, fallback: number): number =>
+  Number.isFinite(Number(v)) && v !== null && v !== '' ? Math.min(1, Math.max(0, Number(v))) : fallback;
+
 const loadSettings = (): Settings => {
   const prefersReduced =
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const defaults: Settings = {
     volume: 0.8,
+    musicVolume: 0.8,
+    sfxVolume: 0.9,
     muted: false,
     reducedMotion: prefersReduced,
     highContrast: false,
@@ -79,7 +86,9 @@ const loadSettings = (): Settings => {
     const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as Partial<Settings>;
     const merged = { ...defaults, ...raw };
     return {
-      volume: Number.isFinite(merged.volume) ? Math.min(1, Math.max(0, Number(merged.volume))) : defaults.volume,
+      volume: level(merged.volume, defaults.volume),
+      musicVolume: level(merged.musicVolume, defaults.musicVolume),
+      sfxVolume: level(merged.sfxVolume, defaults.sfxVolume),
       muted: Boolean(merged.muted),
       reducedMotion: Boolean(merged.reducedMotion),
       highContrast: Boolean(merged.highContrast),
@@ -223,6 +232,8 @@ const RESULT_DELAY_MS = 1800;
 export const useGame = create<GameStore>((set, get) => {
   const initialSettings = loadSettings();
   audio.setVolume(initialSettings.volume);
+  audio.setMusicVolume(initialSettings.musicVolume);
+  audio.setSfxVolume(initialSettings.sfxVolume);
   audio.setMuted(initialSettings.muted);
 
   const persistSettings = (s: Settings) => {
@@ -586,6 +597,8 @@ export const useGame = create<GameStore>((set, get) => {
     updateSettings: (patch) => {
       const s = { ...get().settings, ...patch };
       audio.setVolume(s.volume);
+      audio.setMusicVolume(s.musicVolume);
+      audio.setSfxVolume(s.sfxVolume);
       audio.setMuted(s.muted);
       persistSettings(s);
       set({ settings: s });
