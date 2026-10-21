@@ -1,42 +1,87 @@
 import { COMMANDERS } from '../game/types';
 import { useGame } from '../state/store';
-import { FadeIn, GlassButton, GlassPanel } from './Glass';
+import { CommanderAvatar } from './CommanderAvatar';
+import { FadeIn, GlassButton, Kbd, KeyHint, ScreenHeader } from './Glass';
+import { useHotkeys } from './hotkeys';
+import { COMMANDER_HUES } from './theme';
 
 export function CommanderSelect() {
   const commanderId = useGame((s) => s.commanderId);
   const selectCommander = useGame((s) => s.selectCommander);
   const goMenu = useGame((s) => s.goMenu);
 
+  useHotkeys({
+    '1': () => selectCommander(COMMANDERS[0].id),
+    '2': () => selectCommander(COMMANDERS[1].id),
+    '3': () => selectCommander(COMMANDERS[2].id),
+    '4': () => selectCommander(COMMANDERS[3].id),
+    Enter: () => selectCommander(commanderId),
+    Escape: goMenu,
+  });
+
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center-safe overflow-y-auto p-4 sm:p-6 pointer-events-none">
-      <FadeIn className="mb-7 text-center">
-        <div className="label-caps mb-2 text-accent">Choose your commander</div>
-        <h2 className="title-display text-4xl sm:text-6xl">Who’s on the bridge?</h2>
-        <p className="mt-3 text-sm text-white/55">Cosmetic call sign only. No executive powers in the firing solution.</p>
+      <div className="vignette absolute inset-0" aria-hidden="true" />
+      <FadeIn className="relative mb-8">
+        <ScreenHeader
+          eyebrow="Step 1 of 3 · Commander"
+          title="Who’s on the bridge?"
+          subtitle="Cosmetic call sign only. No executive powers in the firing solution."
+        />
       </FadeIn>
 
-      <div className="grid w-full max-w-5xl grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 pointer-events-auto">
+      <div
+        role="radiogroup"
+        aria-label="Commander"
+        className="relative grid w-full max-w-6xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 pointer-events-auto"
+      >
         {COMMANDERS.map((commander, index) => {
           const selected = commander.id === commanderId;
+          const hue = COMMANDER_HUES[commander.id];
           return (
-            <FadeIn key={commander.id} delay={0.06 * index}>
+            <FadeIn key={commander.id} delay={0.05 * index + 0.08}>
               <button
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                aria-keyshortcuts={String(index + 1)}
                 onClick={() => selectCommander(commander.id)}
-                className={`glass glass-opaque glass-interactive group flex h-full min-h-64 w-full flex-col items-start p-5 text-left cursor-pointer ${
-                  selected ? 'border-accent/60 bg-accent/10' : ''
-                }`}
+                className="glass glass-opaque glass-interactive group flex h-full min-h-72 w-full cursor-pointer flex-col items-start overflow-hidden p-6 text-left"
+                style={
+                  selected
+                    ? {
+                        borderColor: hue.from,
+                        boxShadow: `0 0 0 1px ${hue.from}55, 0 24px 60px rgba(0,0,0,0.5), 0 0 50px ${hue.glow}`,
+                      }
+                    : undefined
+                }
               >
-                <div className="mb-5 flex w-full items-center justify-between">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/25 to-blue-400/10 text-xl font-bold text-accent shadow-[0_0_28px_rgba(34,0,255,0.16)]">
-                    {commander.initials}
-                  </div>
-                  {selected && <span className="label-caps text-accent">Selected</span>}
+                <div
+                  className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full opacity-25 blur-3xl transition-opacity duration-500 group-hover:opacity-50"
+                  style={{ background: hue.to }}
+                  aria-hidden="true"
+                />
+                <div className="mb-6 flex w-full items-start justify-between">
+                  <CommanderAvatar id={commander.id} size="lg" />
+                  {selected ? (
+                    <span className="chip border-white/20 bg-white/10 text-white">
+                      <svg viewBox="0 0 16 16" className="h-3 w-3" aria-hidden="true">
+                        <path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      Last used
+                    </span>
+                  ) : (
+                    <Kbd>{index + 1}</Kbd>
+                  )}
                 </div>
-                <span className="text-xl font-semibold tracking-tight text-white">{commander.name}</span>
-                <span className="mt-1 min-h-10 text-xs leading-relaxed text-accent">{commander.role}</span>
-                <span className="mt-4 text-sm leading-relaxed text-white/60">{commander.tagline}</span>
-                <span className="label-caps mt-auto pt-5 !text-[0.55rem] !tracking-[0.16em]">
-                  {selected ? 'Continue with commander' : 'Select commander'}
+                <span className="text-2xl font-bold tracking-tight text-white">{commander.name}</span>
+                <span className="mt-1.5 min-h-10 text-xs font-medium leading-relaxed" style={{ color: hue.from }}>
+                  {commander.role}
+                </span>
+                <span className="mt-3 text-sm leading-relaxed text-white/70">{commander.tagline}</span>
+                <span className="mt-auto flex w-full items-center justify-between pt-6 text-xs font-semibold text-white/60 transition-colors group-hover:text-white">
+                  <span className="uppercase tracking-[0.16em]">Take command</span>
+                  <span aria-hidden="true" className="transition-transform duration-300 group-hover:translate-x-1">→</span>
                 </span>
               </button>
             </FadeIn>
@@ -44,12 +89,12 @@ export function CommanderSelect() {
         })}
       </div>
 
-      <FadeIn delay={0.32} className="mt-6 pointer-events-auto sm:absolute sm:bottom-20 sm:mt-0">
-        <GlassButton onClick={goMenu}>Back</GlassButton>
+      <FadeIn delay={0.3} className="relative mt-8 flex flex-col items-center gap-3 pointer-events-auto">
+        <GlassButton hotkey="Esc" onClick={goMenu}>
+          Back
+        </GlassButton>
+        <KeyHint keys={['1', '–', '4']}>pick a commander</KeyHint>
       </FadeIn>
-      <GlassPanel className="absolute top-5 hidden px-4 py-2 sm:block">
-        <span className="label-caps !text-[0.55rem] !tracking-[0.15em]">Cognition field exercise · Devin-powered</span>
-      </GlassPanel>
     </div>
   );
 }
