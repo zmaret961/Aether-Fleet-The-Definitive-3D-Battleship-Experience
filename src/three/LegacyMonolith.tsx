@@ -573,7 +573,7 @@ export function LegacyMonolith({
     };
     const onFx = (e: FxEvent) => {
       const now = fxNow();
-      if (useGame.getState().phase !== 'battle') return;
+      if (useGame.getState().phase !== 'battle' || s.defeatAt > 0 || s.victoryAt > 0) return;
       if (e.side === 'enemy') {
         if (e.type === 'explosion') {
           s.flinch = now;
