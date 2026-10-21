@@ -33,7 +33,13 @@ class Guard extends Component<{ children: ReactNode }, { failed: boolean }> {
   }
 }
 
-function keepAlive(root: THREE.Object3D, gl: THREE.WebGLRenderer, camera: THREE.Camera, scene: THREE.Scene) {
+function keepAlive(
+  root: THREE.Object3D,
+  gl: THREE.WebGLRenderer,
+  camera: THREE.Camera,
+  scene: THREE.Scene,
+  linearTarget: THREE.WebGLRenderTarget | null,
+) {
   const holder = new THREE.Group();
   root.traverse((o) => {
     const material = (o as THREE.Mesh).material;
@@ -44,12 +50,26 @@ function keepAlive(root: THREE.Object3D, gl: THREE.WebGLRenderer, camera: THREE.
   });
   // cache hits only: this just bumps each program's reference count
   gl.compile(holder, camera, scene);
+  if (linearTarget) {
+    const linear = holder.clone(false);
+    holder.children.forEach((c) => {
+      const copy = c.clone(false);
+      const mat = (c as THREE.Mesh).material;
+      (copy as THREE.Mesh).material = Array.isArray(mat) ? mat.map((m) => m.clone()) : mat.clone();
+      linear.add(copy);
+    });
+    const prev = gl.getRenderTarget();
+    gl.setRenderTarget(linearTarget);
+    gl.compile(linear, camera, scene);
+    gl.setRenderTarget(prev);
+    KEEP_ALIVE.push(linear);
+  }
   KEEP_ALIVE.push(holder);
 }
 
 const SPECS = [FIREBALL, SPARKS, DEBRIS, SMOKE, WATER_COLUMN, WATER_CROWN, MIST];
 
-export function ShaderWarmup({ onReady }: { onReady: (ms: number) => void }) {
+export function ShaderWarmup({ onReady, postfx }: { onReady: (ms: number) => void; postfx: boolean }) {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
@@ -80,12 +100,23 @@ export function ShaderWarmup({ onReady }: { onReady: (ms: number) => void }) {
     const run = async () => {
       const g = group.current;
       try {
-        if (g) g.visible = true;
+        // Children hide themselves outside battle (the boss rig and its lights);
+        // three.js only counts visible lights, so reveal everything or every lit
+        // material compiles for the wrong light count.
+        g?.traverse((o) => (o.visible = true));
         const pending = gl.compileAsync(scene, camera);
-        if (g) {
-          keepAlive(g, gl, camera, scene);
-          g.visible = false;
+        // With post-processing on, battle frames render into a linear render
+        // target, which is a separate program variant (outputColorSpace).
+        const prev = gl.getRenderTarget();
+        const rt = postfx ? new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }) : null;
+        if (rt) {
+          gl.setRenderTarget(rt);
+          gl.compile(scene, camera);
         }
+        if (g) keepAlive(g, gl, camera, scene, rt);
+        gl.setRenderTarget(prev);
+        rt?.dispose();
+        if (g) g.visible = false;
         await pending;
       } catch {
         if (g) g.visible = false;
@@ -99,7 +130,7 @@ export function ShaderWarmup({ onReady }: { onReady: (ms: number) => void }) {
       window.clearTimeout(timer);
       window.clearTimeout(start);
     };
-  }, [gl, scene, camera]);
+  }, [gl, scene, camera, postfx]);
 
   if (done) return null;
   return (
@@ -123,9 +154,10 @@ export function ShaderWarmup({ onReady }: { onReady: (ms: number) => void }) {
 /** Dev/QA probe: `?perf` (or any dev build) exposes the renderer for frame/program stats. */
 export function PerfProbe() {
   const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
   useEffect(() => {
     if (!import.meta.env.DEV && !new URLSearchParams(location.search).has('perf')) return;
-    (window as unknown as { __aetherGl?: THREE.WebGLRenderer }).__aetherGl = gl;
-  }, [gl]);
+    Object.assign(window, { __aetherGl: gl, __aetherScene: scene });
+  }, [gl, scene]);
   return null;
 }

@@ -210,7 +210,7 @@ function SceneContent({ warm, onWarm }: { warm: boolean; onWarm: (ms: number) =>
       <BoardScene />
       <EffectsLayer />
       <CameraRig />
-      {!warm && <ShaderWarmup onReady={onWarm} />}
+      {!warm && <ShaderWarmup onReady={onWarm} postfx={q.postfx} />}
       <PerfProbe />
       {q.postfx && (
         <Suspense fallback={null}>
