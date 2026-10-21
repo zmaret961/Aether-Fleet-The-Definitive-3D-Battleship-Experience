@@ -25,13 +25,13 @@ export const LEGACY_MONOLITH_SCALE: [number, number, number] = [1.7, 1.35, 1.6];
 
 export const PALETTE = {
   deepSea: '#04101e',
-  seaMid: '#0a2238',
+  seaMid: '#0c2c44',
   accent: '#67e8f9',
   accentSoft: '#22d3ee',
   hit: '#f59e0b',
   hitHot: '#fbbf24',
   miss: '#dbeafe',
-  hull: '#556e85',
-  hullDark: '#2c3c4e',
+  hull: '#8199ae',
+  hullDark: '#34475a',
   enemy: '#fb7185',
 } as const;
