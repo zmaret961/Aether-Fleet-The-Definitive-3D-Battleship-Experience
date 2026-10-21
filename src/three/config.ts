@@ -16,22 +16,28 @@ export const worldToCell = (wx: number, wz: number): Coord | null => {
   return { x, y };
 };
 
-// Battle layout: own fleet sits toward the camera, enemy waters behind —
-// the Battleship "laptop" opened on the table.
-export const PLAYER_BOARD_POS: [number, number, number] = [0, 0, 5.7];
-export const ENEMY_BOARD_POS: [number, number, number] = [0, 0, -5.7];
-export const LEGACY_MONOLITH_POSITION: [number, number, number] = [0, 1.3, -13.5];
-export const LEGACY_MONOLITH_SCALE: [number, number, number] = [1.7, 1.35, 1.6];
+// Battle layout: the Battleship "laptop" opened on the table. Enemy waters are
+// the hero target (full size, centre frame); your own fleet sits in front at a
+// reduced scale so it stays readable without stealing the shot.
+export const ENEMY_BOARD_POS: [number, number, number] = [0, 0, -3.4];
+export const PLAYER_BOARD_SCALE = 0.6;
+export const PLAYER_BOARD_POS: [number, number, number] = [0, 0, ENEMY_BOARD_POS[2] + BOARD_HALF + 1.25 + BOARD_HALF * PLAYER_BOARD_SCALE];
+export const ENEMY_BOARD_SCALE = 1;
+// Keep the FX-tuned boss 3.7 units behind the enemy board's back edge.
+export const LEGACY_MONOLITH_POSITION: [number, number, number] = [0, -0.9, ENEMY_BOARD_POS[2] - BOARD_HALF - 3.7];
+export const LEGACY_MONOLITH_SCALE: [number, number, number] = [1.35, 0.9, 1.2];
+
+export const boardScale = (side: 'player' | 'enemy') => (side === 'player' ? PLAYER_BOARD_SCALE : ENEMY_BOARD_SCALE);
 
 export const PALETTE = {
   deepSea: '#04101e',
-  seaMid: '#0a2238',
+  seaMid: '#0c2c44',
   accent: '#67e8f9',
   accentSoft: '#22d3ee',
   hit: '#f59e0b',
   hitHot: '#fbbf24',
   miss: '#dbeafe',
-  hull: '#556e85',
-  hullDark: '#2c3c4e',
+  hull: '#8199ae',
+  hullDark: '#34475a',
   enemy: '#fb7185',
 } as const;

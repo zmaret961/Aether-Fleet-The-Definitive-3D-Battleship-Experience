@@ -18,6 +18,11 @@ export default tseslint.config(
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
+      // main.tsx wraps the app in <LazyMotion>; `motion.*` would pull the full ~40 kB feature bundle back in.
+      'no-restricted-imports': [
+        'error',
+        { paths: [{ name: 'framer-motion', importNames: ['motion'], message: 'Use `m` (LazyMotion is set up in main.tsx).' }] },
+      ],
     },
   },
 );

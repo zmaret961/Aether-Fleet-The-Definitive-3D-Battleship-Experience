@@ -93,7 +93,12 @@ export type ShotOutcome =
   | { kind: 'win'; shipId: string };
 
 export const inBounds = (c: Coord): boolean =>
-  c.x >= 0 && c.x < GRID_SIZE && c.y >= 0 && c.y < GRID_SIZE;
+  Number.isInteger(c.x) &&
+  Number.isInteger(c.y) &&
+  c.x >= 0 &&
+  c.x < GRID_SIZE &&
+  c.y >= 0 &&
+  c.y < GRID_SIZE;
 
 export const coordEq = (a: Coord, b: Coord): boolean => a.x === b.x && a.y === b.y;
 

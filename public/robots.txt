@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://zachmaret-the-battleship-experience.vercel.app/sitemap.xml

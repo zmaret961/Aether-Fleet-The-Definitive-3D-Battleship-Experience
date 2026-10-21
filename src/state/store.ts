@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { audio } from '../audio/engine';
-import { makeAI } from '../game/ai';
+import { makeAI, pickTaunt, thinkDelayMs, TIER_PERSONALITY } from '../game/ai';
+import { parsePlacementMemory, placementTell, recordPlacement } from '../game/prior';
+import type { PlacementMemory } from '../game/prior';
 import type { AIPlayer, Difficulty } from '../game/ai';
 import {
   canPlace,
@@ -17,10 +19,12 @@ import {
   shoot,
 } from '../game/engine';
 import type { Match, MatchStats } from '../game/engine';
+import { buildStory } from '../game/story';
+import type { MatchStory } from '../game/story';
 import { COMMANDERS, ENEMY_FLEET_NAMES, FLEET, shipSpec } from '../game/types';
 import type { CommanderId } from '../game/types';
 import type { Coord, Orientation, ShipSpec } from '../game/types';
-import { fx, MISSILE_FLIGHT_MS } from './fx';
+import { BOSS_DEFEAT_MS, BOSS_VICTORY_MS, fx, MISSILE_FLIGHT_MS } from './fx';
 
 export type Phase = 'menu' | 'howto' | 'commander' | 'difficulty' | 'deploy' | 'battle' | 'over';
 export type BoardView = 'enemy' | 'player';
@@ -28,6 +32,8 @@ export type PerfMode = 'auto' | 'high' | 'low';
 
 export interface Settings {
   volume: number;
+  musicVolume: number;
+  sfxVolume: number;
   muted: boolean;
   reducedMotion: boolean;
   highContrast: boolean;
@@ -44,6 +50,24 @@ type Records = Partial<Record<Difficulty, PersistedRecord>>;
 const RECORDS_KEY = 'aether-fleet:records';
 const SETTINGS_KEY = 'aether-fleet:settings';
 const COMMANDER_KEY = 'aether-fleet:commander';
+const PLACEMENT_MEMORY_KEY = 'aether-fleet:placement-memory';
+
+/** The Admiral studies how this player deploys, across sessions. */
+const loadPlacementMemory = (): PlacementMemory | null => {
+  try {
+    return parsePlacementMemory(JSON.parse(localStorage.getItem(PLACEMENT_MEMORY_KEY) ?? 'null'));
+  } catch {
+    return null;
+  }
+};
+
+const persistPlacementMemory = (memory: PlacementMemory) => {
+  try {
+    localStorage.setItem(PLACEMENT_MEMORY_KEY, JSON.stringify(memory));
+  } catch {
+    /* private mode */
+  }
+};
 
 const loadCommander = (): CommanderId => {
   try {
@@ -63,22 +87,58 @@ const loadRecords = (): Records => {
   }
 };
 
+const level = (v: unknown, fallback: number): number =>
+  Number.isFinite(Number(v)) && v !== null && v !== '' ? Math.min(1, Math.max(0, Number(v))) : fallback;
+
 const loadSettings = (): Settings => {
   const prefersReduced =
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const defaults: Settings = {
     volume: 0.8,
+    musicVolume: 0.8,
+    sfxVolume: 0.9,
     muted: false,
     reducedMotion: prefersReduced,
     highContrast: false,
     perfMode: 'auto',
   };
   try {
-    return { ...defaults, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as Partial<Settings>) };
+    const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as Partial<Settings>;
+    const merged = { ...defaults, ...raw };
+    return {
+      volume: level(merged.volume, defaults.volume),
+      musicVolume: level(merged.musicVolume, defaults.musicVolume),
+      sfxVolume: level(merged.sfxVolume, defaults.sfxVolume),
+      muted: Boolean(merged.muted),
+      reducedMotion: Boolean(merged.reducedMotion),
+      highContrast: Boolean(merged.highContrast),
+      perfMode: (['auto', 'high', 'low'] as const).includes(merged.perfMode) ? merged.perfMode : 'auto',
+    };
   } catch {
     return defaults;
   }
 };
+
+interface SavedPlacement {
+  id: string;
+  origin: Coord;
+  orientation: Orientation;
+}
+
+const layoutOf = (board: Board): SavedPlacement[] =>
+  board.ships.map((ship) => ({
+    id: ship.spec.id,
+    origin: ship.cells[0],
+    orientation: ship.cells.length > 1 && ship.cells[1].x !== ship.cells[0].x ? 'h' : 'v',
+  }));
+
+const boardFromLayout = (layout: SavedPlacement[]): Board => {
+  const board = createBoard();
+  for (const p of layout) placeShip(board, shipSpec(p.id), p.origin, p.orientation);
+  return board;
+};
+
+const cellName = (c: Coord) => `${String.fromCharCode(65 + c.x)}${c.y + 1}`;
 
 interface DeployState {
   board: Board;
@@ -100,6 +160,14 @@ interface GameStore {
   target: Coord | null; // pending firing solution
   lastOutcome: { by: 'player' | 'ai'; text: string; seq: number } | null;
   stats: MatchStats | null;
+  story: MatchStory | null;
+  /** battle is frozen: AI timers parked, input ignored */
+  paused: boolean;
+  /** match is decided; the boss finale plays before the field report appears */
+  resultPending: boolean;
+  bossOpeningLine: string | null;
+  conceded: boolean;
+  lastLayout: SavedPlacement[] | null;
   records: Records;
   settings: Settings;
   settingsOpen: boolean;
@@ -122,13 +190,106 @@ interface GameStore {
   confirmFire: () => void;
   setBoardView: (v: BoardView) => void;
   playAgain: () => void;
+  rematch: () => void;
+  pauseGame: () => void;
+  resumeGame: () => void;
+  togglePause: () => void;
+  /** skip the finale hold and show the field report now */
+  revealResult: () => void;
   updateSettings: (patch: Partial<Settings>) => void;
   setSettingsOpen: (open: boolean) => void;
 }
 
-let aiTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * Pausable timers. Every delayed step of a match goes through `later` so a
+ * pause can freeze the turn mid-flight and a quit can drop it entirely.
+ */
+interface PendingTimer {
+  id: number;
+  fn: () => void;
+  handle: ReturnType<typeof setTimeout> | null;
+  due: number;
+  remaining: number;
+}
+const timers = new Map<number, PendingTimer>();
+let nextTimerId = 1;
+let timersFrozen = false;
+
+const armTimer = (t: PendingTimer) => {
+  t.due = performance.now() + t.remaining;
+  t.handle = setTimeout(() => {
+    timers.delete(t.id);
+    t.fn();
+  }, t.remaining);
+};
+const later = (fn: () => void, ms: number): number => {
+  const t: PendingTimer = { id: nextTimerId++, fn, handle: null, due: 0, remaining: ms };
+  timers.set(t.id, t);
+  if (!timersFrozen) armTimer(t);
+  return t.id;
+};
+const cancelTimer = (id: number) => {
+  const t = timers.get(id);
+  if (t?.handle) clearTimeout(t.handle);
+  timers.delete(id);
+};
+const freezeTimers = () => {
+  timersFrozen = true;
+  timers.forEach((t) => {
+    if (!t.handle) return;
+    clearTimeout(t.handle);
+    t.handle = null;
+    t.remaining = Math.max(0, t.due - performance.now());
+  });
+};
+const thawTimers = () => {
+  timersFrozen = false;
+  timers.forEach((t) => {
+    if (!t.handle) armTimer(t);
+  });
+};
+const cancelTimers = () => {
+  timers.forEach((t) => t.handle && clearTimeout(t.handle));
+  timers.clear();
+  timersFrozen = false;
+  pendingReveal = null;
+};
+
+/** Match timers still scheduled; 0 once a match is quit or finished. */
+export const pendingTimerCount = () => timers.size;
+
+/**
+ * Mission clock: real (monotonic) time spent in battle, excluding pauses,
+ * stopped at the deciding shot rather than when the report appears.
+ */
+let clockAccumMs = 0;
+let clockSince: number | null = null;
+const clockStart = () => {
+  clockAccumMs = 0;
+  clockSince = performance.now();
+};
+const clockStop = () => {
+  if (clockSince !== null) clockAccumMs += performance.now() - clockSince;
+  clockSince = null;
+};
+const clockResume = () => {
+  if (clockSince === null) clockSince = performance.now();
+};
+export const missionElapsedMs = () => clockAccumMs + (clockSince === null ? 0 : performance.now() - clockSince);
+export const formatClock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+
+let pendingReveal: { id: number; reveal: () => void } | null = null;
+const AI_REVIEW_MS = 1150;
+/** How long the boss defeat/victory finale plays before the field report. */
+export const RESULT_HOLD_MS = Math.max(BOSS_DEFEAT_MS, BOSS_VICTORY_MS) + 300;
 
 export const useGame = create<GameStore>((set, get) => {
+  const initialSettings = loadSettings();
+  audio.setVolume(initialSettings.volume);
+  audio.setMusicVolume(initialSettings.musicVolume);
+  audio.setSfxVolume(initialSettings.sfxVolume);
+  audio.setMuted(initialSettings.muted);
+
   const persistSettings = (s: Settings) => {
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
@@ -147,20 +308,31 @@ export const useGame = create<GameStore>((set, get) => {
 
   const finishIfOver = (m: Match) => {
     if (!m.winner) return;
-    const stats = matchStats(m, get().difficulty);
-    const rec = loadRecords();
-    const cur = rec[get().difficulty] ?? { wins: 0, losses: 0 };
+    clockStop();
+    const stats = { ...matchStats(m, get().difficulty), durationSec: Math.max(1, Math.round(clockAccumMs / 1000)) };
+    const story = buildStory(m, { conceded: get().conceded, seed: m.startedAt });
+    // in-memory records are the source of truth so private mode still tallies the session
+    const rec: Records = { ...get().records };
+    const cur = { ...(rec[get().difficulty] ?? { wins: 0, losses: 0 }) };
     if (m.winner === 'player') cur.wins += 1;
     else cur.losses += 1;
     rec[get().difficulty] = cur;
     persistRecords(rec);
     audio[m.winner === 'player' ? 'victory' : 'defeat']();
-    setTimeout(() => set({ phase: 'over', stats, records: rec }), 1800);
+    const reveal = () => {
+      pendingReveal = null;
+      if (get().match !== m) return;
+      // a skipped finale can leave cosmetic fx (late sink) queued; the report owns the screen now
+      cancelTimers();
+      set({ phase: 'over', stats, story, target: null, resultPending: false });
+    };
+    set({ records: rec, resultPending: true, target: null });
+    pendingReveal = { id: later(reveal, RESULT_HOLD_MS), reveal };
   };
 
   const resolvePlayerShot = (c: Coord) => {
     const { match } = get();
-    if (!match) return;
+    if (!match || match.winner) return;
     const ev = shoot(match, 'player', c);
     if (ev.outcome.kind === 'already') {
       set({ turnLock: false });
@@ -168,18 +340,15 @@ export const useGame = create<GameStore>((set, get) => {
     }
 
     if (ev.outcome.kind === 'miss') {
-      audio.miss();
       fx.emit({ type: 'splash', coord: c, side: 'enemy' });
       fx.emit({ type: 'marker', coord: c, outcome: 'miss', side: 'enemy' });
       set({ lastOutcome: { by: 'player', text: 'CI failed', seq: match.log.length } });
     } else {
-      audio.hit();
       fx.emit({ type: 'explosion', coord: c, side: 'enemy' });
       fx.emit({ type: 'marker', coord: c, outcome: 'hit', side: 'enemy' });
       const shipName = 'shipId' in ev.outcome ? ENEMY_FLEET_NAMES[ev.outcome.shipId] : '';
       if (ev.outcome.kind === 'sunk' || ev.outcome.kind === 'win') {
-        setTimeout(() => {
-          audio.sink();
+        later(() => {
           fx.emit({ type: 'sink', coord: c, side: 'enemy' });
         }, 450);
         set({
@@ -205,49 +374,48 @@ export const useGame = create<GameStore>((set, get) => {
   };
 
   const scheduleAI = () => {
-    if (aiTimer) clearTimeout(aiTimer);
-    const delay = 900 + Math.random() * 700;
-    aiTimer = setTimeout(() => {
+    const { match: current, ai: currentAI, difficulty } = get();
+    if (!current || !currentAI || current.winner) return;
+    // Decide now (the board cannot change during Legacy's turn); pace the shot by the tier's personality.
+    const c = currentAI.next(aiView(current));
+    const delay = thinkDelayMs(difficulty, Math.random, currentAI.lastDecision);
+    later(() => {
       const { match, ai } = get();
-      if (!match || !ai || match.winner) return;
-      const c = ai.next(aiView(match));
-      audio.fire();
+      if (!match || match !== current || ai !== currentAI || match.winner) return;
       fx.emit({ type: 'missile', coord: c, side: 'player' });
-      setTimeout(() => {
-        if (get().phase !== 'battle' || get().match !== match) return;
+      later(() => {
+        if (get().phase !== 'battle' || get().match !== match || match.winner) return;
         const ev = shoot(match, 'ai', c);
         if (ev.outcome.kind === 'miss') {
-          audio.miss();
           fx.emit({ type: 'splash', coord: c, big: false, side: 'player' });
           fx.emit({ type: 'marker', coord: c, outcome: 'miss', side: 'player' });
           set({ lastOutcome: { by: 'ai', text: "Legacy's build failed", seq: match.log.length } });
         } else {
-          audio.hit();
           fx.emit({ type: 'explosion', coord: c, side: 'player' });
           fx.emit({ type: 'marker', coord: c, outcome: 'hit', side: 'player' });
           const shipName = 'shipId' in ev.outcome ? shipSpec(ev.outcome.shipId).name : '';
           if (ev.outcome.kind === 'sunk' || ev.outcome.kind === 'win') {
-            setTimeout(() => {
-              audio.sink();
+            later(() => {
               fx.emit({ type: 'sink', coord: c, side: 'player' });
             }, 450);
             set({
-              lastOutcome: { by: 'ai', text: `Regression in ${shipName}`, seq: match.log.length },
+              lastOutcome: { by: 'ai', text: `Legacy rolled back ${shipName}`, seq: match.log.length },
             });
           } else {
             set({ lastOutcome: { by: 'ai', text: `Regression in ${shipName}`, seq: match.log.length } });
           }
         }
-        set((s) => ({ matchVersion: s.matchVersion + 1 }));
+        // Reveal Legacy's result now; input stays locked through the review.
+        set((s) => ({ matchVersion: s.matchVersion + 1, aiThinking: false }));
         if (match.winner) {
           finishIfOver(match);
           return;
         }
-        setTimeout(() => {
-          if (get().phase !== 'battle') return;
+        later(() => {
+          if (get().phase !== 'battle' || get().match !== match) return;
           match.turn = 'player';
-          set({ aiThinking: false, turnLock: false });
-        }, 1600);
+          set({ turnLock: false });
+        }, AI_REVIEW_MS);
       }, MISSILE_FLIGHT_MS);
     }, delay);
   };
@@ -266,38 +434,63 @@ export const useGame = create<GameStore>((set, get) => {
     target: null,
     lastOutcome: null,
     stats: null,
+    story: null,
+    paused: false,
+    resultPending: false,
+    bossOpeningLine: null,
+    conceded: false,
+    lastLayout: null,
     records: loadRecords(),
-    settings: loadSettings(),
+    settings: initialSettings,
     settingsOpen: false,
 
     goMenu: () => {
-      if (aiTimer) clearTimeout(aiTimer);
-      set({ phase: 'menu', match: null, stats: null, aiThinking: false, turnLock: false, target: null });
+      cancelTimers();
+      clockStop();
+      set({
+        phase: 'menu',
+        match: null,
+        stats: null,
+        story: null,
+        aiThinking: false,
+        turnLock: false,
+        target: null,
+        paused: false,
+        resultPending: false,
+        bossOpeningLine: null,
+        lastOutcome: null,
+      });
     },
-    goHowTo: () => set({ phase: 'howto' }),
-    goDifficulty: () => set({ phase: 'commander' }),
-    goCommander: () => set({ phase: 'commander' }),
+    goHowTo: () => set({ phase: 'howto', resultPending: false }),
+    goDifficulty: () => set({ phase: 'commander', resultPending: false }),
+    goCommander: () => set({ phase: 'commander', resultPending: false }),
     selectCommander: (id) => {
       try {
         localStorage.setItem(COMMANDER_KEY, id);
       } catch {
         /* private mode */
       }
-      set({ commanderId: id, phase: 'difficulty' });
+      set({ commanderId: id, phase: 'difficulty', resultPending: false });
     },
     concede: () => {
       const { match } = get();
       if (!match || match.winner) return;
       match.winner = 'ai';
-      set({ target: null, turnLock: true, aiThinking: false });
+      if (get().paused) get().resumeGame();
+      set({ target: null, turnLock: true, aiThinking: false, conceded: true });
       finishIfOver(match);
     },
 
     startDeploy: (d) => {
       audio.click();
+      cancelTimers();
+      clockStop();
       set({
+        paused: false,
         difficulty: d,
         phase: 'deploy',
+        resultPending: false,
+        bossOpeningLine: null,
         deploy: { board: createBoard(), selected: null, orientation: 'h' },
         boardView: 'enemy',
       });
@@ -369,10 +562,27 @@ export const useGame = create<GameStore>((set, get) => {
     beginBattle: () => {
       const { deploy, difficulty } = get();
       if (deploy.board.ships.length !== FLEET.length) return;
+      cancelTimers();
+      const lastLayout = layoutOf(deploy.board);
       const match = createMatch(deploy.board, randomLayout(Math.random));
+      const memory = loadPlacementMemory();
+      const ai = makeAI(difficulty, Math.random, { memory });
+      persistPlacementMemory(recordPlacement(memory, deploy.board.ships.map((ship) => ship.cells)));
+      clockStart();
+      const openingLine =
+        placementTell(memory) ??
+        (TIER_PERSONALITY[difficulty].taunts.read?.length ? pickTaunt(difficulty, 'read') : null);
       set({
+        lastLayout,
+        paused: false,
+        resultPending: false,
+        conceded: false,
+        stats: null,
+        story: null,
+        target: null,
+        bossOpeningLine: openingLine,
         match,
-        ai: makeAI(difficulty),
+        ai,
         phase: 'battle',
         boardView: 'enemy',
         matchVersion: 0,
@@ -386,22 +596,26 @@ export const useGame = create<GameStore>((set, get) => {
 
     aimAt: (c) => {
       const s = get();
-      if (s.phase !== 'battle' || !s.match || s.turnLock || s.match.winner) return;
+      if (s.phase !== 'battle' || !s.match || s.turnLock || s.paused || s.match.winner) return;
       const marks = s.match.enemy.marks;
       if (marks[c.y][c.x] !== 'unknown') return;
-      audio.sonarPulse();
       fx.emit({ type: 'sonar', coord: c, side: 'enemy' });
       set({ target: c });
     },
 
     confirmFire: () => {
       const s = get();
-      if (!s.target || s.turnLock) return;
-      set({ turnLock: true });
-      audio.fire();
-      fx.emit({ type: 'missile', coord: s.target, side: 'enemy' });
-      setTimeout(() => {
-        resolvePlayerShot(s.target!);
+      if (s.phase !== 'battle' || !s.target || s.turnLock || s.paused || !s.match) return;
+      const target = s.target;
+      const match = s.match;
+      set({
+        turnLock: true,
+        lastOutcome: { by: 'player', text: `Deploying to ${cellName(target)}…`, seq: -match.log.length - 1 },
+      });
+      fx.emit({ type: 'missile', coord: target, side: 'enemy' });
+      later(() => {
+        if (get().match !== match) return;
+        resolvePlayerShot(target);
         // stays locked through the AI turn; scheduleAI unlocks after the
         // board review
       }, MISSILE_FLIGHT_MS);
@@ -414,13 +628,78 @@ export const useGame = create<GameStore>((set, get) => {
 
     playAgain: () => {
       audio.click();
-      if (aiTimer) clearTimeout(aiTimer);
-      set({ phase: 'difficulty', match: null, stats: null });
+      cancelTimers();
+      set({
+        phase: 'difficulty',
+        match: null,
+        stats: null,
+        story: null,
+        paused: false,
+        resultPending: false,
+        bossOpeningLine: null,
+        target: null,
+        lastOutcome: null,
+      });
+    },
+
+    rematch: () => {
+      const { lastLayout } = get();
+      cancelTimers();
+      audio.click();
+      set({
+        phase: 'deploy',
+        match: null,
+        stats: null,
+        story: null,
+        paused: false,
+        resultPending: false,
+        bossOpeningLine: null,
+        target: null,
+        lastOutcome: null,
+        aiThinking: false,
+        turnLock: false,
+        boardView: 'enemy',
+        deploy: {
+          board: lastLayout && lastLayout.length === FLEET.length ? boardFromLayout(lastLayout) : createBoard(),
+          selected: null,
+          orientation: 'h',
+        },
+      });
+    },
+
+    pauseGame: () => {
+      const { phase, match, paused } = get();
+      if (phase !== 'battle' || !match || match.winner || paused) return;
+      freezeTimers();
+      clockStop();
+      audio.setAmbientLevel(0.08);
+      set({ paused: true });
+    },
+
+    resumeGame: () => {
+      const { match, paused } = get();
+      if (!paused) return;
+      // Paused time doesn't count toward mission duration.
+      if (match && !match.winner) clockResume();
+      thawTimers();
+      audio.setAmbientLevel(0.2);
+      set({ paused: false });
+    },
+
+    togglePause: () => (get().paused ? get().resumeGame() : get().pauseGame()),
+
+    revealResult: () => {
+      const pending = pendingReveal;
+      if (!pending || !get().resultPending) return;
+      cancelTimer(pending.id);
+      pending.reveal();
     },
 
     updateSettings: (patch) => {
       const s = { ...get().settings, ...patch };
       audio.setVolume(s.volume);
+      audio.setMusicVolume(s.musicVolume);
+      audio.setSfxVolume(s.sfxVolume);
       audio.setMuted(s.muted);
       persistSettings(s);
       set({ settings: s });
@@ -431,3 +710,7 @@ export const useGame = create<GameStore>((set, get) => {
 });
 
 export const placedCount = (s: GameStore) => s.deploy.board.ships.length;
+
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  (window as unknown as { __aether: typeof useGame }).__aether = useGame;
+}
