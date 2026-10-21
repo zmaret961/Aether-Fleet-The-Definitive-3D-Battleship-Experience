@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { DIFFICULTY_INFO } from '../game/ai';
 import { useGame } from '../state/store';
 import { FadeIn, GlassButton, GlassPanel } from './Glass';
@@ -17,7 +18,13 @@ export function ResultScreen() {
   const difficulty = useGame((s) => s.difficulty);
   const commanderId = useGame((s) => s.commanderId);
 
-  useHotkeys({ Enter: rematch, Escape: goMenu });
+  // brief grace so a key mashed to skip the finale doesn't also rematch / quit
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setArmed(true), 700);
+    return () => clearTimeout(t);
+  }, []);
+  useHotkeys({ Enter: rematch, Escape: goMenu }, armed);
 
   if (!stats) return null;
   const won = stats.winner === 'player';

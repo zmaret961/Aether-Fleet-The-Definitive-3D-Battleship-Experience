@@ -134,6 +134,8 @@ interface GameStore {
   story: MatchStory | null;
   /** battle is frozen: AI timers parked, input ignored */
   paused: boolean;
+  /** match is decided; the boss finale plays before the field report appears */
+  resultPending: boolean;
   conceded: boolean;
   lastLayout: SavedPlacement[] | null;
   records: Records;
@@ -162,6 +164,8 @@ interface GameStore {
   pauseGame: () => void;
   resumeGame: () => void;
   togglePause: () => void;
+  /** skip the finale hold and show the field report now */
+  revealResult: () => void;
   updateSettings: (patch: Partial<Settings>) => void;
   setSettingsOpen: (open: boolean) => void;
 }
@@ -180,7 +184,6 @@ interface PendingTimer {
 const timers = new Map<number, PendingTimer>();
 let nextTimerId = 1;
 let timersFrozen = false;
-let pausedAt: number | null = null;
 
 const armTimer = (t: PendingTimer) => {
   t.due = performance.now() + t.remaining;
@@ -189,10 +192,16 @@ const armTimer = (t: PendingTimer) => {
     t.fn();
   }, t.remaining);
 };
-const later = (fn: () => void, ms: number) => {
+const later = (fn: () => void, ms: number): number => {
   const t: PendingTimer = { id: nextTimerId++, fn, handle: null, due: 0, remaining: ms };
   timers.set(t.id, t);
   if (!timersFrozen) armTimer(t);
+  return t.id;
+};
+const cancelTimer = (id: number) => {
+  const t = timers.get(id);
+  if (t?.handle) clearTimeout(t.handle);
+  timers.delete(id);
 };
 const freezeTimers = () => {
   timersFrozen = true;
@@ -213,12 +222,38 @@ const cancelTimers = () => {
   timers.forEach((t) => t.handle && clearTimeout(t.handle));
   timers.clear();
   timersFrozen = false;
-  pausedAt = null;
+  pendingReveal = null;
 };
+
+/** Match timers still scheduled; 0 once a match is quit or finished. */
+export const pendingTimerCount = () => timers.size;
+
+/**
+ * Mission clock: real (monotonic) time spent in battle, excluding pauses,
+ * stopped at the deciding shot rather than when the report appears.
+ */
+let clockAccumMs = 0;
+let clockSince: number | null = null;
+const clockStart = () => {
+  clockAccumMs = 0;
+  clockSince = performance.now();
+};
+const clockStop = () => {
+  if (clockSince !== null) clockAccumMs += performance.now() - clockSince;
+  clockSince = null;
+};
+const clockResume = () => {
+  if (clockSince === null) clockSince = performance.now();
+};
+export const missionElapsedMs = () => clockAccumMs + (clockSince === null ? 0 : performance.now() - clockSince);
+export const formatClock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+
+let pendingReveal: { id: number; reveal: () => void } | null = null;
 
 const AI_THINK_MS = [650, 1150] as const;
 const AI_REVIEW_MS = 1150;
-const RESULT_DELAY_MS = 1800;
+/** How long the boss defeat/victory finale plays before the field report. */
+export const RESULT_HOLD_MS = 2800;
 
 export const useGame = create<GameStore>((set, get) => {
   const initialSettings = loadSettings();
@@ -243,17 +278,26 @@ export const useGame = create<GameStore>((set, get) => {
 
   const finishIfOver = (m: Match) => {
     if (!m.winner) return;
-    const stats = matchStats(m, get().difficulty);
+    clockStop();
+    const stats = { ...matchStats(m, get().difficulty), durationSec: Math.max(1, Math.round(clockAccumMs / 1000)) };
     const story = buildStory(m, { conceded: get().conceded, seed: m.startedAt });
-    const rec = loadRecords();
-    const cur = rec[get().difficulty] ?? { wins: 0, losses: 0 };
+    // in-memory records are the source of truth so private mode still tallies the session
+    const rec: Records = { ...get().records };
+    const cur = { ...(rec[get().difficulty] ?? { wins: 0, losses: 0 }) };
     if (m.winner === 'player') cur.wins += 1;
     else cur.losses += 1;
     rec[get().difficulty] = cur;
     persistRecords(rec);
     audio[m.winner === 'player' ? 'victory' : 'defeat']();
-    set({ records: rec });
-    later(() => set({ phase: 'over', stats, story, target: null }), RESULT_DELAY_MS);
+    const reveal = () => {
+      pendingReveal = null;
+      if (get().match !== m) return;
+      // a skipped finale can leave cosmetic fx (late sink) queued; the report owns the screen now
+      cancelTimers();
+      set({ phase: 'over', stats, story, target: null, resultPending: false });
+    };
+    set({ records: rec, resultPending: true, target: null });
+    pendingReveal = { id: later(reveal, RESULT_HOLD_MS), reveal };
   };
 
   const resolvePlayerShot = (c: Coord) => {
@@ -359,6 +403,7 @@ export const useGame = create<GameStore>((set, get) => {
     stats: null,
     story: null,
     paused: false,
+    resultPending: false,
     conceded: false,
     lastLayout: null,
     records: loadRecords(),
@@ -376,6 +421,7 @@ export const useGame = create<GameStore>((set, get) => {
         turnLock: false,
         target: null,
         paused: false,
+        resultPending: false,
         lastOutcome: null,
       });
     },
@@ -480,9 +526,11 @@ export const useGame = create<GameStore>((set, get) => {
       cancelTimers();
       const lastLayout = layoutOf(deploy.board);
       const match = createMatch(deploy.board, randomLayout(Math.random));
+      clockStart();
       set({
         lastLayout,
         paused: false,
+        resultPending: false,
         conceded: false,
         stats: null,
         story: null,
@@ -535,7 +583,16 @@ export const useGame = create<GameStore>((set, get) => {
     playAgain: () => {
       audio.click();
       cancelTimers();
-      set({ phase: 'difficulty', match: null, stats: null, story: null, paused: false, target: null, lastOutcome: null });
+      set({
+        phase: 'difficulty',
+        match: null,
+        stats: null,
+        story: null,
+        paused: false,
+        resultPending: false,
+        target: null,
+        lastOutcome: null,
+      });
     },
 
     rematch: () => {
@@ -548,6 +605,7 @@ export const useGame = create<GameStore>((set, get) => {
         stats: null,
         story: null,
         paused: false,
+        resultPending: false,
         target: null,
         lastOutcome: null,
         aiThinking: false,
@@ -565,7 +623,7 @@ export const useGame = create<GameStore>((set, get) => {
       const { phase, match, paused } = get();
       if (phase !== 'battle' || !match || match.winner || paused) return;
       freezeTimers();
-      pausedAt = Date.now();
+      clockStop();
       audio.setAmbientLevel(0.08);
       set({ paused: true });
     },
@@ -574,14 +632,20 @@ export const useGame = create<GameStore>((set, get) => {
       const { match, paused } = get();
       if (!paused) return;
       // Paused time doesn't count toward mission duration.
-      if (match && pausedAt !== null) match.startedAt += Date.now() - pausedAt;
-      pausedAt = null;
+      if (match && !match.winner) clockResume();
       thawTimers();
       audio.setAmbientLevel(0.2);
       set({ paused: false });
     },
 
     togglePause: () => (get().paused ? get().resumeGame() : get().pauseGame()),
+
+    revealResult: () => {
+      const pending = pendingReveal;
+      if (!pending || !get().resultPending) return;
+      cancelTimer(pending.id);
+      pending.reveal();
+    },
 
     updateSettings: (patch) => {
       const s = { ...get().settings, ...patch };

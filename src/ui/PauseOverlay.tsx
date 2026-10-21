@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { DIFFICULTY_INFO } from '../game/ai';
-import { useGame } from '../state/store';
+import { formatClock, missionElapsedMs, useGame } from '../state/store';
 import { GlassButton, GlassPanel } from './Glass';
 
 export function PauseOverlay() {
@@ -41,7 +41,7 @@ export function PauseOverlay() {
               <p className="mb-5 text-xs text-white/55">
                 Devin is idle. No ACUs are being consumed.
                 <br />
-                {shots} shots fired · {closed}/5 tickets closed
+                {shots} shots fired · {closed}/5 tickets closed · <span className="num">{formatClock(missionElapsedMs() / 1000)}</span> on the clock
               </p>
               <div className="flex flex-col gap-2.5">
                 <GlassButton variant="primary" onClick={resume} autoFocus>

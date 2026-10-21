@@ -573,6 +573,7 @@ export function LegacyMonolith({
     };
     const onFx = (e: FxEvent) => {
       const now = fxNow();
+      if (e.type === 'bossMood') return;
       if (useGame.getState().phase !== 'battle' || s.defeatAt > 0 || s.victoryAt > 0) return;
       if (e.side === 'enemy') {
         if (e.type === 'explosion') {

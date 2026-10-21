@@ -5,6 +5,7 @@ import type { Coord } from '../game/types';
  * and spawns transient effects (sonar ripples, splashes, explosions).
  */
 export type BoardSide = 'player' | 'enemy';
+export type BossMood = 'smug' | 'laugh' | 'hurt' | 'rage' | 'gloat' | 'charge' | 'dead' | 'victory';
 
 export type FxEvent =
   | { type: 'sonar'; coord: Coord; side: BoardSide }
@@ -12,7 +13,8 @@ export type FxEvent =
   | { type: 'splash'; coord: Coord; big?: boolean; side: BoardSide }
   | { type: 'explosion'; coord: Coord; side: BoardSide }
   | { type: 'sink'; coord: Coord; side: BoardSide }
-  | { type: 'marker'; coord: Coord; outcome: 'miss' | 'hit'; side: BoardSide };
+  | { type: 'marker'; coord: Coord; outcome: 'miss' | 'hit'; side: BoardSide }
+  | { type: 'bossMood'; mood: BossMood };
 
 export const MISSILE_FLIGHT_MS = 720;
 
