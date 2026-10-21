@@ -17,6 +17,28 @@ export const fxUniforms = {
 
 export const fxNow = () => fxUniforms.uTime.value;
 
+// ---------------------------------------------------------------- fx clock
+// FX time can be slowed (hit-stop / slow-mo flash on a sink) while real time
+// keeps running for anything with a fixed real-world duration.
+const clock = { real: 0, scale: 1, target: 1, holdUntil: 0 };
+export const realNow = () => clock.real;
+export const fxTimeScale = () => clock.scale;
+/** Drop FX time to `scale` for `hold` real seconds, then ease back to 1. */
+export const slowMo = (scale: number, hold: number) => {
+  clock.scale = Math.min(clock.scale, scale);
+  clock.target = Math.min(clock.target, scale);
+  clock.holdUntil = Math.max(clock.holdUntil, clock.real + hold);
+};
+/** Advance both clocks; returns the scaled FX delta. */
+export const tickFx = (dt: number) => {
+  clock.real += dt;
+  if (clock.real >= clock.holdUntil) clock.target = 1;
+  clock.scale += (clock.target - clock.scale) * Math.min(1, dt * (clock.target > clock.scale ? 7 : 30));
+  const fdt = dt * clock.scale;
+  fxUniforms.uTime.value += fdt;
+  return fdt;
+};
+
 // ---------------------------------------------------------------- camera trauma
 let trauma = 0;
 export const addTrauma = (amount: number) => {
@@ -40,7 +62,7 @@ export interface LightRequest {
 }
 export const LIGHT_POOL_SIZE = 4;
 export const lightSlots: (LightRequest | null)[] = Array.from({ length: LIGHT_POOL_SIZE }, () => null);
-export const flashLight = (req: Omit<LightRequest, 'birth'>) => {
+export const flashLight = (req: Omit<LightRequest, 'birth'>, delay = 0) => {
   let slot = lightSlots.findIndex((l) => !l || fxNow() - l.birth > l.life);
   if (slot < 0) {
     let oldest = 0;
@@ -49,8 +71,12 @@ export const flashLight = (req: Omit<LightRequest, 'birth'>) => {
     });
     slot = oldest;
   }
-  lightSlots[slot] = { ...req, birth: fxNow() };
+  lightSlots[slot] = { ...req, birth: fxNow() + delay };
 };
+
+// ---------------------------------------------------------------- boss geometry
+/** Shoulder missile pods on the Legacy Monolith, in boss-local (unscaled) units. */
+export const BOSS_POD_LOCAL: [number, number, number] = [1.75, 6.55, 0.4];
 
 // ---------------------------------------------------------------- board helpers
 export const boardBase = (side: BoardSide) => (side === 'player' ? PLAYER_BOARD_POS : ENEMY_BOARD_POS);

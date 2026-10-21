@@ -6,15 +6,25 @@ import type { Coord } from '../game/types';
  */
 export type BoardSide = 'player' | 'enemy';
 
+export type BossMood = 'smug' | 'laugh' | 'hurt' | 'rage' | 'gloat' | 'charge' | 'dead' | 'victory';
+
 export type FxEvent =
   | { type: 'sonar'; coord: Coord; side: BoardSide }
   | { type: 'missile'; coord: Coord; side: BoardSide }
   | { type: 'splash'; coord: Coord; big?: boolean; side: BoardSide }
   | { type: 'explosion'; coord: Coord; side: BoardSide }
   | { type: 'sink'; coord: Coord; side: BoardSide }
-  | { type: 'marker'; coord: Coord; outcome: 'miss' | 'hit'; side: BoardSide };
+  | { type: 'marker'; coord: Coord; outcome: 'miss' | 'hit'; side: BoardSide }
+  | { type: 'bossMood'; mood: BossMood };
 
 export const MISSILE_FLIGHT_MS = 720;
+
+/**
+ * Legacy Monolith end-of-match sequences, in real milliseconds measured from
+ * the moment `match.winner` is set. The result screen should wait this long.
+ */
+export const BOSS_DEFEAT_MS = 2500;
+export const BOSS_VICTORY_MS = 2200;
 
 type Handler = (e: FxEvent) => void;
 

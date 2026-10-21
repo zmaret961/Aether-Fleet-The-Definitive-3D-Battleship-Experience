@@ -3,10 +3,12 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { fx, MISSILE_FLIGHT_MS } from '../state/fx';
 import type { BoardSide } from '../state/fx';
+import { ENEMY_FLEET_NAMES } from '../game/types';
 import { useGame } from '../state/store';
 import { cellToWorld, LEGACY_MONOLITH_POSITION, LEGACY_MONOLITH_SCALE, PALETTE, PLAYER_BOARD_POS } from './config';
 import {
   addTrauma,
+  BOSS_POD_LOCAL,
   burstGeometry,
   cellWorld,
   DEBRIS,
@@ -20,10 +22,13 @@ import {
   makeParticleMaterial,
   MIST,
   rand,
+  realNow,
   shipAt,
   SMOKE,
+  slowMo,
   SPARKS,
   takeTrauma,
+  tickFx,
   WATER_COLUMN,
   WATER_CROWN,
 } from './fxKit';
@@ -37,8 +42,10 @@ interface Item {
   id: number;
   kind: Kind;
   birth: number;
+  realBirth?: number;
   life: number;
   side: BoardSide;
+  ship?: { id: string; name: string };
   pos: THREE.Vector3;
   start?: THREE.Vector3;
   cells?: THREE.Vector3[];
@@ -188,7 +195,8 @@ const CHURN: BurstSpec = {
   count: 26, life: [1.4, 2.4], speed: [0.1, 0.4], up: [0.1, 0.35], size: [0.18, 0.3], spread: 0.35, delay: [0.2, 2.6],
   shape: 'ring', sizeStart: 0.6, sizeEnd: 1.6, colors: ['#ffffff', '#d6f0ff', '#90c6e6'], opacity: 0.55, soft: 1.4,
 };
-const MUZZLE_SMOKE = scaled(SMOKE, 0.7, { life: [0.9, 1.5], size: [0.4, 0.7], delay: [0, 0.1], colors: ['#d9dee6', '#a1a9b4', '#5d6670'], opacity: 0.45 });
+const MUZZLE_SMOKE = scaled(SMOKE, 0.55, { life: [0.45, 0.8], up: [0.15, 0.45], size: [0.35, 0.6], delay: [0, 0.08], colors: ['#d9dee6', '#a1a9b4', '#5d6670'], opacity: 0.38 });
+const MERGE_SPARKS = scaled(SPARKS, 0.8, { colors: ['#ffffff', PALETTE.accent, '#22d3ee'], speed: [3.5, 7] });
 
 function Explosion({ item }: { item: Item }) {
   const { birth, pos, side } = item;
@@ -203,6 +211,14 @@ function Explosion({ item }: { item: Item }) {
       <Burst spec={SMOKE} birth={birth} position={p} />
       <Ring birth={birth} life={0.7} from={0.3} to={2.2} color="#ffb46b" opacity={0.5} inner={0.9} position={p} />
       <Ring birth={birth + 0.05} life={1.3} from={0.4} to={1.9} color="#dff3ff" opacity={0.35} inner={0.7} position={p} />
+      {side === 'enemy' && (
+        <>
+          <Glow birth={birth} life={0.18} size={1.9} color={PALETTE.accent} position={[p[0], 0.6, p[2]]} />
+          <Burst spec={MERGE_SPARKS} birth={birth} position={p} />
+          <Ring birth={birth} life={0.55} from={0.2} to={3.0} color={PALETTE.accent} opacity={0.75} inner={0.92} position={p} />
+          <Callout birth={birth + 0.05} life={1.15} style="merged" title="MERGED" height={0.95} position={[p[0], 1.55, p[2]]} />
+        </>
+      )}
     </group>
   );
 }
@@ -225,11 +241,37 @@ function Splash({ item }: { item: Item }) {
 const SINK_STAGGER = 0.17;
 
 function SinkSequence({ item }: { item: Item }) {
-  const { birth, pos } = item;
+  const { birth, pos, side, ship } = item;
   const cells = item.cells ?? [pos];
   const center = cells.reduce((acc, c) => acc.add(c), new THREE.Vector3()).multiplyScalar(1 / cells.length);
   const end = birth + cells.length * SINK_STAGGER;
   const c: [number, number, number] = [center.x, 0.2, center.z];
+  const camera = useThree((st) => st.camera);
+  const fired = useRef(-1);
+  const enemy = side === 'enemy';
+  useFrame(() => {
+    const now = fxNow();
+    const reduced = useGame.getState().settings.reducedMotion;
+    const k = reduced ? 0.25 : 1;
+    while (fired.current < cells.length && now >= birth + (fired.current + 1) * SINK_STAGGER) {
+      fired.current++;
+      if (fired.current < cells.length) addTrauma((enemy ? 0.16 : 0.1) * k);
+      else {
+        // the hull goes: hit-stop into slow-mo, white-hot flash, FOV punch
+        addTrauma((enemy ? 0.85 : 0.5) * k);
+        if (enemy) {
+          if (!reduced) {
+            slowMo(0.2, 0.34);
+            fovPunch(camera, 3.2);
+          }
+          screenFlash(reduced ? 0.12 : 0.34, 0.42);
+        } else {
+          screenFlash(reduced ? 0.06 : 0.16, 0.35, '#ff7a6b');
+        }
+      }
+    }
+  });
+  const ticket = ship ? TICKET_IDS[ship.id] ?? 'AF-1042' : 'AF-1042';
   return (
     <group>
       {cells.map((cell, i) => {
@@ -244,7 +286,7 @@ function SinkSequence({ item }: { item: Item }) {
           </group>
         );
       })}
-      <Glow birth={end} life={0.45} size={2.1} color="#fff6e0" position={[center.x, 0.6, center.z]} />
+      <Glow birth={end} life={0.45} size={enemy ? 2.6 : 2.0} color="#fff6e0" position={[center.x, 0.6, center.z]} />
       <Burst spec={FIREBALL} birth={end} position={[center.x, 0.5, center.z]} />
       <Burst spec={BIG_COLUMN} birth={end} position={c} />
       <Burst spec={DEBRIS} birth={end} position={c} />
@@ -252,6 +294,30 @@ function SinkSequence({ item }: { item: Item }) {
       <Burst spec={BIG_SMOKE} birth={end} position={c} />
       <Ring birth={end} life={1.0} from={0.5} to={5.2} color="#ffc07a" opacity={0.9} inner={0.9} position={c} />
       <Ring birth={end + 0.1} life={2.2} from={0.8} to={4.0} color="#dff3ff" opacity={0.5} inner={0.8} position={c} />
+      {enemy ? (
+        <>
+          <Ring birth={end} life={0.8} from={0.4} to={7.0} color="#5dffa9" opacity={0.65} inner={0.95} position={c} />
+          <Callout
+            birth={end + 0.04}
+            life={2.3}
+            style="ticket"
+            title="TICKET CLOSED"
+            sub={`${ticket} \u00b7 ${ship?.name ?? 'Legacy code'}`}
+            height={1.9}
+            position={[center.x, 2.3, center.z]}
+          />
+        </>
+      ) : (
+        <Callout
+          birth={end + 0.04}
+          life={1.8}
+          style="incident"
+          title="SEV-1 INCIDENT"
+          sub={`${ship?.name ?? 'Ship'} is down`}
+          height={1.15}
+          position={[center.x, 1.9, center.z]}
+        />
+      )}
     </group>
   );
 }
@@ -288,76 +354,279 @@ function IncomingWarning({ birth, pos }: { birth: number; pos: THREE.Vector3 }) 
   );
 }
 
+// ------------------------------------------------------------------ 3D callouts
+
+type CalloutStyle = 'merged' | 'ticket' | 'incident';
+
+const TICKET_IDS: Record<string, string> = {
+  carrier: 'COBOL-1959',
+  battleship: 'LEG-4096',
+  cruiser: 'CVE-2014',
+  submarine: 'FLAKY-404',
+  destroyer: 'JIRA-9001',
+};
+
+const roundRect = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+};
+
+function drawCallout(style: CalloutStyle, title: string, sub: string) {
+  const W = style === 'ticket' ? 640 : style === 'incident' ? 560 : 420;
+  const H = style === 'ticket' ? 224 : style === 'incident' ? 168 : 112;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const c = canvas.getContext('2d')!;
+  const accent = style === 'incident' ? '#ff5d6c' : style === 'ticket' ? '#5dffa9' : PALETTE.accent;
+  c.shadowColor = accent;
+  c.shadowBlur = 18;
+  roundRect(c, 12, 12, W - 24, H - 24, 22);
+  c.fillStyle = 'rgba(4, 12, 16, 0.9)';
+  c.fill();
+  c.lineWidth = 5;
+  c.strokeStyle = accent;
+  c.stroke();
+  c.shadowBlur = 0;
+  // status glyph
+  const gx = style === 'merged' ? 62 : 84;
+  const gy = H / 2;
+  const gr = style === 'merged' ? 26 : 40;
+  c.beginPath();
+  c.arc(gx, gy, gr, 0, Math.PI * 2);
+  c.fillStyle = accent;
+  c.fill();
+  c.strokeStyle = '#04100c';
+  c.lineWidth = gr * 0.28;
+  c.lineCap = 'round';
+  c.beginPath();
+  if (style === 'incident') {
+    c.moveTo(gx, gy - gr * 0.5);
+    c.lineTo(gx, gy + gr * 0.12);
+    c.moveTo(gx, gy + gr * 0.48);
+    c.lineTo(gx, gy + gr * 0.5);
+  } else {
+    c.moveTo(gx - gr * 0.45, gy + gr * 0.02);
+    c.lineTo(gx - gr * 0.1, gy + gr * 0.36);
+    c.lineTo(gx + gr * 0.48, gy - gr * 0.34);
+  }
+  c.stroke();
+  const tx = gx + gr + 24;
+  c.textBaseline = 'middle';
+  c.fillStyle = '#f4fff9';
+  if (style === 'merged') {
+    c.font = '900 46px ui-monospace, Menlo, monospace';
+    c.fillText(title, tx, gy + 2);
+  } else {
+    c.font = `900 ${style === 'ticket' ? 58 : 48}px ui-monospace, Menlo, monospace`;
+    c.fillText(title, tx, gy - (style === 'ticket' ? 26 : 20));
+    c.font = `700 ${style === 'ticket' ? 34 : 30}px ui-monospace, Menlo, monospace`;
+    c.fillStyle = accent;
+    c.fillText(sub, tx, gy + (style === 'ticket' ? 34 : 28));
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return { tex, aspect: W / H };
+}
+
+/** Camera-facing chip that pops in over a cell, drifts up and fades. */
+function Callout({
+  birth,
+  life,
+  style,
+  title,
+  sub = '',
+  height,
+  position,
+}: {
+  birth: number;
+  life: number;
+  style: CalloutStyle;
+  title: string;
+  sub?: string;
+  height: number;
+  position: [number, number, number];
+}) {
+  const sprite = useRef<THREE.Sprite>(null);
+  const mat = useRef<THREE.SpriteMaterial>(null);
+  const art = useMemo(() => drawCallout(style, title, sub), [style, title, sub]);
+  useEffect(() => () => art.tex.dispose(), [art]);
+  useFrame(() => {
+    if (!sprite.current || !mat.current) return;
+    const a = fxNow() - birth;
+    sprite.current.visible = a >= 0 && a <= life;
+    if (!sprite.current.visible) return;
+    const k = popIn(a / 0.42);
+    sprite.current.scale.set(height * art.aspect * k, height * k, 1);
+    sprite.current.position.set(position[0], position[1] + Math.min(a, 1.2) * 0.35, position[2]);
+    mat.current.opacity = Math.min(1, (life - a) / 0.3);
+  });
+  return (
+    <sprite ref={sprite} visible={false} renderOrder={30}>
+      <spriteMaterial ref={mat} map={art.tex} transparent depthTest={false} depthWrite={false} toneMapped={false} />
+    </sprite>
+  );
+}
+
+const popIn = (t: number) =>
+  t <= 0 ? 0 : t >= 1 ? 1 : 1 + Math.pow(2, -9 * t) * Math.sin((t * 10 - 0.75) * ((2 * Math.PI) / 3)) * 0.9;
+
+// ------------------------------------------------------------------ screen flash
+
+const flashState = { at: -99, peak: 0, life: 0.3, color: new THREE.Color('#fff3dc') };
+/** Full-screen additive flash on real time (unaffected by slow-mo). */
+const screenFlash = (peak: number, life: number, color = '#fff3dc') => {
+  flashState.at = realNow();
+  flashState.peak = peak;
+  flashState.life = life;
+  flashState.color.set(color);
+};
+
+function ScreenFlash() {
+  const mesh = useRef<THREE.Mesh>(null);
+  const mat = useRef<THREE.MeshBasicMaterial>(null);
+  const camera = useThree((s) => s.camera);
+  const fwd = useMemo(() => new THREE.Vector3(), []);
+  useFrame(() => {
+    if (!mesh.current || !mat.current) return;
+    const p = (realNow() - flashState.at) / flashState.life;
+    mesh.current.visible = p >= 0 && p < 1;
+    if (!mesh.current.visible) return;
+    camera.getWorldDirection(fwd);
+    mesh.current.position.copy(camera.position).addScaledVector(fwd, 0.5);
+    mesh.current.quaternion.copy(camera.quaternion);
+    mat.current.color.copy(flashState.color);
+    mat.current.opacity = flashState.peak * Math.pow(1 - p, 2);
+  });
+  return (
+    <mesh ref={mesh} visible={false} renderOrder={999} frustumCulled={false}>
+      <planeGeometry args={[4, 4]} />
+      <meshBasicMaterial
+        ref={mat}
+        transparent
+        opacity={0}
+        depthTest={false}
+        depthWrite={false}
+        toneMapped={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </mesh>
+  );
+}
+
+const fovPunch = (camera: THREE.Camera, amount: number) => {
+  if (camera instanceof THREE.PerspectiveCamera) {
+    camera.fov -= amount;
+    camera.updateProjectionMatrix();
+  }
+};
+
 const UP = new THREE.Vector3(0, 1, 0);
+
+const TRAIL_VERT = /* glsl */ `
+varying float vU;
+void main() {
+  vU = uv.x;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+// Arc-length shaded ribbon: a hot head that cools into a short, quickly fading
+// tail, plus a faint thread of the arc already flown that dissolves behind it.
+const TRAIL_FRAG = /* glsl */ `
+uniform vec3 uColor;
+uniform float uHead;
+uniform float uFade;
+uniform float uTail;
+uniform float uGain;
+varying float vU;
+void main() {
+  float d = uHead - vU;
+  if (d < 0.0) discard;
+  float hot = 1.0 - smoothstep(0.0, uTail, d);
+  float thread = 0.14 * (1.0 - smoothstep(0.0, 0.7, d));
+  float a = (hot * hot + thread) * uFade * uGain;
+  vec3 col = mix(uColor, vec3(1.0, 0.97, 0.9), hot * hot * 0.75);
+  gl_FragColor = vec4(col * a, 1.0);
+  #include <colorspace_fragment>
+}`;
+
+const makeTrailMaterial = (color: string, tail: number, gain: number) =>
+  new THREE.ShaderMaterial({
+    vertexShader: TRAIL_VERT,
+    fragmentShader: TRAIL_FRAG,
+    uniforms: {
+      uColor: { value: new THREE.Color(color) },
+      uHead: { value: 0 },
+      uFade: { value: 1 },
+      uTail: { value: tail },
+      uGain: { value: gain },
+    },
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+  });
+
+/** Accelerating flight profile: arc-length fraction flown at flight progress p. */
+const flightEase = (p: number) => 0.55 * p + 0.45 * p * p;
+const flightTimeAt = (u: number) => ((-0.55 + Math.sqrt(0.3025 + 1.8 * u)) / 0.9) * FLIGHT;
 
 function Missile({ item }: { item: Item }) {
   const { birth, side } = item;
+  const realBirth = item.realBirth ?? realNow();
   const start = item.start!;
-  const end = useMemo(() => new THREE.Vector3(item.pos.x, 0.22, item.pos.z), [item.pos]);
   const color = side === 'enemy' ? PALETTE.accent : PALETTE.enemy;
-  const height = side === 'enemy' ? 5.4 : 3.2;
   const body = useRef<THREE.Group>(null);
   const flame = useRef<THREE.Mesh>(null);
 
-  const pointAt = useMemo(() => {
-    const v = new THREE.Vector3();
-    return (p: number, out = v) =>
-      out.set(
-        THREE.MathUtils.lerp(start.x, end.x, p),
-        THREE.MathUtils.lerp(start.y, end.y, p) + Math.sin(p * Math.PI) * height,
-        THREE.MathUtils.lerp(start.z, end.z, p),
-      );
-  }, [start, end, height]);
-
-  const trail = useMemo(() => {
-    const smokeN = 150;
-    const hotN = 70;
+  const kit = useMemo(() => {
+    const end = new THREE.Vector3(item.pos.x, 0.22, item.pos.z);
+    const mid = start.clone().lerp(end, 0.5);
+    // your shots lob low and bow sideways so the climb never reads as a vertical column
+    const lift = side === 'enemy' ? 3.4 : 2.6;
+    const bow = (side === 'enemy' ? 1.7 : 0.8) * (item.id % 2 ? 1 : -1);
+    const ctrl = mid.add(new THREE.Vector3(bow, lift * 2, 0));
+    ctrl.y = Math.max(ctrl.y, Math.max(start.y, end.y) + 1.2);
+    const curve = new THREE.QuadraticBezierCurve3(start.clone(), ctrl, end);
+    const core = new THREE.TubeGeometry(curve, 72, 0.045, 6, false);
+    const glow = new THREE.TubeGeometry(curve, 72, 0.15, 8, false);
+    const coreMat = makeTrailMaterial(color, 0.16, 1);
+    const glowMat = makeTrailMaterial(color, 0.22, 0.32);
+    const puffN = 46;
     const tmp = new THREE.Vector3();
-    const smoke = makeParticleGeometry(smokeN, (i, o) => {
-      const p = i / smokeN;
-      pointAt(p, tmp);
+    const puffs = makeParticleGeometry(puffN, (i, o) => {
+      const u = 0.05 + (i / puffN) * 0.9;
+      curve.getPointAt(u, tmp);
       o.pos = [tmp.x, tmp.y, tmp.z];
-      o.vel = [rand(-0.18, 0.18), rand(0.05, 0.25), rand(-0.18, 0.18)];
-      o.delay = p * FLIGHT;
-      o.life = rand(0.9, 1.6);
-      o.size = rand(0.16, 0.26);
+      o.vel = [rand(-0.12, 0.12), rand(0, 0.1), rand(-0.12, 0.12)];
+      o.delay = flightTimeAt(u);
+      o.life = rand(0.32, 0.6);
+      o.size = rand(0.14, 0.22);
     });
-    const hot = makeParticleGeometry(hotN, (i, o) => {
-      const p = i / hotN;
-      pointAt(p, tmp);
-      o.pos = [tmp.x, tmp.y, tmp.z];
-      o.vel = [rand(-0.1, 0.1), rand(-0.1, 0.1), rand(-0.1, 0.1)];
-      o.delay = p * FLIGHT;
-      o.life = rand(0.16, 0.3);
-      o.size = rand(0.26, 0.38);
-    });
-    const smokeMat = makeParticleMaterial(
-      {
-        colors: ['#f4f7fb', '#c3ccd8', '#6f7987'],
-        opacity: 0.32,
-        sizeStart: 0.7,
-        sizeEnd: 3.2,
-        drag: 1.4,
-        soft: 2.2,
-        fadeIn: 0.02,
-      },
+    const puffMat = makeParticleMaterial(
+      { colors: ['#eef2f7', '#b8c1cc', '#7d8693'], opacity: 0.2, sizeStart: 0.8, sizeEnd: 2.1, drag: 2, soft: 2, fadeIn: 0.04 },
       birth,
     );
-    const hotMat = makeParticleMaterial(
-      { colors: ['#ffffff', color, '#ff5a1a'], additive: true, sizeStart: 1, sizeEnd: 0.25, soft: 1.1, fadeIn: 0.01 },
-      birth,
-    );
-    return { smoke, hot, smokeMat, hotMat };
-  }, [pointAt, birth, color]);
+    return { curve, core, glow, coreMat, glowMat, puffs, puffMat };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(
     () => () => {
-      trail.smoke.dispose();
-      trail.hot.dispose();
-      trail.smokeMat.dispose();
-      trail.hotMat.dispose();
+      kit.core.dispose();
+      kit.glow.dispose();
+      kit.coreMat.dispose();
+      kit.glowMat.dispose();
+      kit.puffs.dispose();
+      kit.puffMat.dispose();
     },
-    [trail],
+    [kit],
   );
 
   useEffect(() => {
@@ -366,16 +635,23 @@ function Missile({ item }: { item: Item }) {
   }, [start, color]);
 
   const cur = useMemo(() => new THREE.Vector3(), []);
-  const prev = useMemo(() => new THREE.Vector3(), []);
+  const tan = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
+    // flight runs on real time so the warhead lands exactly when the store resolves the shot
+    const p = (realNow() - realBirth) / FLIGHT;
+    const u = flightEase(THREE.MathUtils.clamp(p, 0, 1));
+    const fade = p < 1 ? 1 : Math.max(0, 1 - (p - 1) * FLIGHT / 0.3);
+    for (const m of [kit.coreMat, kit.glowMat]) {
+      m.uniforms.uHead.value = u;
+      m.uniforms.uFade.value = fade;
+    }
     if (!body.current) return;
-    const p = (fxNow() - birth) / FLIGHT;
     body.current.visible = p >= 0 && p < 1;
     if (!body.current.visible) return;
-    pointAt(p, cur);
-    pointAt(Math.max(0, p - 0.01), prev);
+    kit.curve.getPointAt(u, cur);
+    kit.curve.getTangentAt(u, tan);
     body.current.position.copy(cur);
-    if (p > 0.005) body.current.quaternion.setFromUnitVectors(UP, cur.clone().sub(prev).normalize());
+    body.current.quaternion.setFromUnitVectors(UP, tan.normalize());
     if (flame.current) {
       const f = 0.8 + Math.random() * 0.45;
       flame.current.scale.set(f, 0.8 + Math.random() * 0.7, f);
@@ -384,8 +660,9 @@ function Missile({ item }: { item: Item }) {
 
   return (
     <group>
-      <points geometry={trail.smoke} material={trail.smokeMat} frustumCulled={false} />
-      <points geometry={trail.hot} material={trail.hotMat} frustumCulled={false} />
+      <mesh geometry={kit.glow} material={kit.glowMat} frustumCulled={false} renderOrder={4} />
+      <mesh geometry={kit.core} material={kit.coreMat} frustumCulled={false} renderOrder={5} />
+      <points geometry={kit.puffs} material={kit.puffMat} frustumCulled={false} />
       <Glow birth={birth} life={0.25} size={0.9} color={color} position={[start.x, start.y, start.z]} />
       <Burst spec={MUZZLE_SMOKE} birth={birth} position={[start.x, start.y, start.z]} />
       {side === 'player' && <IncomingWarning birth={birth} pos={item.pos} />}
@@ -436,11 +713,12 @@ const LIFE: Record<Kind, number> = {
 function missileStart(side: BoardSide, coord: { x: number; y: number }): THREE.Vector3 {
   const [cx] = cellToWorld(coord);
   if (side === 'player') {
-    // the boss fires from the hatch on top of its cabinet
+    // the boss fires from the shoulder pod on the target's side
+    const sx = cx >= 0 ? 1 : -1;
     return new THREE.Vector3(
-      LEGACY_MONOLITH_POSITION[0] + cx * 0.3,
-      LEGACY_MONOLITH_POSITION[1] + 5.95 * LEGACY_MONOLITH_SCALE[1],
-      LEGACY_MONOLITH_POSITION[2] + 0.2 * LEGACY_MONOLITH_SCALE[2],
+      LEGACY_MONOLITH_POSITION[0] + sx * BOSS_POD_LOCAL[0] * LEGACY_MONOLITH_SCALE[0],
+      LEGACY_MONOLITH_POSITION[1] + BOSS_POD_LOCAL[1] * LEGACY_MONOLITH_SCALE[1],
+      LEGACY_MONOLITH_POSITION[2] + BOSS_POD_LOCAL[2] * LEGACY_MONOLITH_SCALE[2],
     );
   }
   // your fleet fires: launch from the surviving ship closest to the target column
@@ -473,7 +751,7 @@ export function EffectsLayer() {
   useEffect(
     () =>
       fx.subscribe((e) => {
-        if (e.type === 'marker') return; // markers come from board state, not fx
+        if (e.type === 'marker' || e.type === 'bossMood') return; // markers come from board state, not fx
         const birth = fxNow();
         const pos = cellWorld(e.side, e.coord);
         const item: Item = { id: nextId++, kind: e.type, birth, life: LIFE[e.type], side: e.side, pos };
@@ -482,44 +760,56 @@ export function EffectsLayer() {
         switch (e.type) {
           case 'missile':
             item.start = missileStart(e.side, e.coord);
+            item.realBirth = realNow();
             break;
           case 'explosion':
-            flashLight({ pos: pos.clone().setY(1.0), color: '#ffab47', peak: 42, life: 0.55, distance: 12 });
-            addTrauma((e.side === 'player' ? 0.5 : 0.36) * k);
+            if (e.side === 'enemy') {
+              // your hit: brighter flash, harder kick, a 60ms hit-stop and a small FOV punch
+              flashLight({ pos: pos.clone().setY(1.0), color: '#ffc27a', peak: 60, life: 0.6, distance: 14 });
+              addTrauma(0.44 * k);
+              if (!reduced) {
+                slowMo(0.08, 0.06);
+                fovPunch(camera, 0.9);
+              }
+            } else {
+              flashLight({ pos: pos.clone().setY(1.0), color: '#ffab47', peak: 36, life: 0.5, distance: 11 });
+              addTrauma(0.3 * k);
+            }
             break;
           case 'splash':
             flashLight({ pos: pos.clone().setY(0.8), color: '#bfe6ff', peak: 7, life: 0.4, distance: 6 });
-            addTrauma(0.08 * k);
+            addTrauma((e.side === 'enemy' ? 0.06 : 0.08) * k);
             break;
           case 'sink': {
             const ship = shipAt(e.side, e.coord);
             item.cells = ship ? ship.cells.map((c) => cellWorld(e.side, c)) : [pos];
+            if (ship) {
+              const name = e.side === 'enemy' ? ENEMY_FLEET_NAMES[ship.spec.id] ?? ship.spec.name : ship.spec.name;
+              item.ship = { id: ship.spec.id, name };
+            }
             const cells = item.cells;
-            cells.forEach((c, i) =>
-              window.setTimeout(() => {
-                flashLight({ pos: c.clone().setY(1.0), color: '#ff9a3c', peak: 26, life: 0.35, distance: 9 });
-                addTrauma(0.16 * k);
-              }, i * SINK_STAGGER * 1000),
-            );
-            window.setTimeout(() => {
-              const mid = cells[Math.floor(cells.length / 2)];
-              flashLight({ pos: mid.clone().setY(1.6), color: '#ffb35c', peak: 70, life: 0.9, distance: 16 });
-              addTrauma(0.75 * k);
-            }, cells.length * SINK_STAGGER * 1000);
+            // fixed pool of 4 lights: every other cell, then the big one
+            cells.forEach((c, i) => {
+              if (i % 2 === 0) flashLight({ pos: c.clone().setY(1.0), color: '#ff9a3c', peak: 26, life: 0.35, distance: 9 }, i * SINK_STAGGER);
+            });
+            const mid = cells[Math.floor(cells.length / 2)];
+            const big = e.side === 'enemy' ? 90 : 60;
+            flashLight({ pos: mid.clone().setY(1.6), color: '#ffb35c', peak: big, life: 0.9, distance: 16 }, cells.length * SINK_STAGGER);
             break;
           }
         }
         setItems((cur) => [...cur, item]);
       }),
-    [],
+    [camera],
   );
 
-  useFrame(({ clock, gl }, dt) => {
-    fxUniforms.uTime.value = clock.elapsedTime;
+  useFrame(({ gl }, rawDt) => {
+    const dt = Math.min(rawDt, 0.1);
+    tickFx(dt);
     gl.getDrawingBufferSize(size.current);
     fxUniforms.uResY.value = size.current.y;
 
-    const now = clock.elapsedTime;
+    const now = fxNow();
     if (itemsRef.current.some((i) => now - i.birth > i.life)) {
       setItems((cur) => cur.filter((i) => now - i.birth <= i.life));
     }
@@ -550,16 +840,18 @@ export function EffectsLayer() {
     camera.position.sub(shakeOffset.current);
     const t = takeTrauma(dt);
     const s = t * t * 0.55;
+    const rt = realNow();
     shakeOffset.current.set(
-      Math.sin(now * 61.3) * s + Math.sin(now * 23.1) * s * 0.5,
-      Math.sin(now * 53.7 + 1.3) * s * 0.7,
-      Math.sin(now * 47.9 + 2.1) * s * 0.4,
+      Math.sin(rt * 61.3) * s + Math.sin(rt * 23.1) * s * 0.5,
+      Math.sin(rt * 53.7 + 1.3) * s * 0.7,
+      Math.sin(rt * 47.9 + 2.1) * s * 0.4,
     );
     camera.position.add(shakeOffset.current);
   });
 
   return (
     <group>
+      <ScreenFlash />
       {Array.from({ length: LIGHT_POOL_SIZE }).map((_, i) => (
         <pointLight key={i} ref={(l) => { lights.current[i] = l; }} intensity={0} distance={10} decay={2} />
       ))}
