@@ -44,6 +44,25 @@ function Toggle({ on, onChange, id, label }: { on: boolean; onChange: (v: boolea
   );
 }
 
+function VolumeRow({ id, label, desc, value, muted, onChange }: { id: string; label: string; desc?: string; value: number; muted: boolean; onChange: (v: number) => void }) {
+  const pct = Math.round(value * 100);
+  return (
+    <Row label={label} htmlFor={id} desc={muted ? `Muted · ${pct}%` : desc ? `${desc} · ${pct}%` : `${pct}%`}>
+      <input
+        id={id}
+        type="range"
+        min={0}
+        max={1}
+        step={0.05}
+        value={value}
+        aria-valuetext={`${pct}%`}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-36 shrink-0 cursor-pointer accent-[#9aa7ff] sm:w-40"
+      />
+    </Row>
+  );
+}
+
 function Modal({ open, onClose, labelledBy, children, width = 'max-w-md' }: { open: boolean; onClose: () => void; labelledBy: string; children: ReactNode; width?: string }) {
   const reduced = useGame((s) => s.settings.reducedMotion);
   return (
@@ -90,7 +109,6 @@ function SettingsDialog() {
   const id = useId();
 
   const patch = (p: Partial<Settings>) => update(p);
-  const volPct = Math.round(settings.volume * 100);
 
   return (
     <Modal open={open} onClose={() => setOpen(false)} labelledBy={`${id}-title`}>
@@ -106,19 +124,9 @@ function SettingsDialog() {
             Close
           </GlassButton>
         </div>
-        <Row label="Master volume" htmlFor={`${id}-vol`} desc={settings.muted ? 'Muted' : `${volPct}%`}>
-          <input
-            id={`${id}-vol`}
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={settings.volume}
-            aria-valuetext={`${volPct}%`}
-            onChange={(e) => patch({ volume: Number(e.target.value), muted: false })}
-            className="w-40 cursor-pointer accent-[#9aa7ff]"
-          />
-        </Row>
+        <VolumeRow id={`${id}-vol`} label="Master volume" value={settings.volume} muted={settings.muted} onChange={(v) => patch({ volume: v, muted: false })} />
+        <VolumeRow id={`${id}-music`} label="Music" desc="Score and stingers" value={settings.musicVolume} muted={settings.muted} onChange={(v) => patch({ musicVolume: v, muted: false })} />
+        <VolumeRow id={`${id}-sfx`} label="Sound effects" desc="Weapons, sea, the Monolith" value={settings.sfxVolume} muted={settings.muted} onChange={(v) => patch({ sfxVolume: v, muted: false })} />
         <Row label="Mute all audio" desc="Shortcut: M" htmlFor={`${id}-mute`}>
           <Toggle id={`${id}-mute`} label="Mute all audio" on={settings.muted} onChange={(v) => patch({ muted: v })} />
         </Row>
