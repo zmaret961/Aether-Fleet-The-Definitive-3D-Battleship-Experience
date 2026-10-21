@@ -172,6 +172,34 @@ export function BattleScreen() {
     over: { label: match.winner === 'player' ? 'Backlog closed' : 'Fleet lost', sub: 'Compiling field report…', tone: match.winner === 'player' ? 'text-success' : 'text-danger' },
   }[state];
 
+  const outcomeChip = (
+    <div className="flex h-8 justify-center" aria-live="polite">
+      <AnimatePresence mode="wait">
+        {lastOutcome && lastEvent && (
+          <motion.div
+            key={lastOutcome.seq}
+            initial={{ opacity: 0, y: reducedMotion ? 0 : 6, scale: reducedMotion ? 1 : 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: reducedMotion ? 0 : -6 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            className={`chip max-w-full whitespace-nowrap border-white/15 bg-[#050e1b]/85 px-3.5 py-1 text-[0.8rem] backdrop-blur-xl ${TONE_CLASS[toneOf(lastEvent)]}`}
+          >
+            <span className="label-caps !text-[0.575rem] !text-white/55">{lastOutcome.by === 'player' ? 'You' : 'Legacy'}</span>
+            <span className="num font-mono text-xs text-white/70">{cellName(lastEvent.coord)}</span>
+            <span className="truncate font-semibold">{lastOutcome.text}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+
+  const bannerGlow =
+    state === 'ai'
+      ? '!border-danger/45 shadow-[0_0_32px_rgba(251,113,133,0.18)]'
+      : state === 'player' || state === 'aim'
+        ? '!border-accent/40 shadow-[0_0_32px_rgba(154,167,255,0.16)]'
+        : '';
+
   return (
     <div className="fixed inset-0 pointer-events-none">
       {/* damage pulse */}
@@ -188,76 +216,73 @@ export function BattleScreen() {
         )}
       </AnimatePresence>
 
-      {/* top-left: commander / mission */}
-      <FadeIn from="above" className="absolute left-4 top-4 sm:left-5 sm:top-5">
-        <GlassPanel className="glass-hud flex items-center gap-3 py-2.5 pl-2.5 pr-4">
+      {/* ---------- compact two-row HUD (phones + tablets) ---------- */}
+      <FadeIn from="above" className="absolute inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] lg:hidden">
+        <GlassPanel className={`glass-hud px-2.5 py-2 transition-[border-color,box-shadow] duration-500 ${bannerGlow}`} role="status">
+          <div className="flex items-center gap-2.5">
+            <CommanderAvatar id={commander.id} size="sm" />
+            <span className={`live-dot ${turnCopy.tone}`} aria-hidden="true" />
+            <div className="min-w-0 flex-1 leading-tight">
+              <div className={`truncate text-sm font-bold tracking-tight ${turnCopy.tone}`}>{turnCopy.label}</div>
+              <div className="truncate text-[0.68rem] text-white/55">{turnCopy.sub}</div>
+            </div>
+            <div className="shrink-0 text-right leading-none">
+              <div className="label-caps !text-[0.55rem]">Turn</div>
+              <div className="num mt-0.5 text-base font-bold text-white">{Math.max(turn, 1)}</div>
+            </div>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/8 pt-2">
+            <FleetGauge label="Fleet" tone="text-accent" value={`${playerAfloat}/5`} ships={match.player.ships} own />
+            <FleetGauge label="Backlog" tone="text-danger" value={`${enemySunk}/5`} ships={match.enemy.ships} />
+          </div>
+        </GlassPanel>
+        {state === 'ai' && <div className="scan-bar mx-4 -mt-px text-danger" aria-hidden="true" />}
+      </FadeIn>
+
+      {/* ---------- desktop: commander chip ---------- */}
+      <FadeIn from="above" className="absolute left-5 top-5 hidden lg:block">
+        <GlassPanel className="glass-hud flex w-60 items-center gap-3 py-2 pl-2 pr-4 xl:w-64">
           <CommanderAvatar id={commander.id} size="md" />
           <div className="min-w-0">
-            <div className="text-sm font-semibold leading-tight text-white">{commander.name}</div>
-            <div className="mt-0.5 text-[0.7rem] text-white/60">
+            <div className="truncate text-sm font-semibold leading-tight text-white">{commander.name}</div>
+            <div className="mt-0.5 truncate text-[0.7rem] text-white/60">
               vs <span className="font-semibold text-danger">{info.label}</span>
             </div>
           </div>
         </GlassPanel>
       </FadeIn>
 
-      {/* top-center: turn indicator + latest outcome */}
-      <div className="absolute left-4 right-28 top-4 flex flex-col items-center gap-2 sm:top-5 lg:left-1/2 lg:right-auto lg:w-[30rem] lg:-translate-x-1/2">
-        <FadeIn from="above" className="w-full">
-          <GlassPanel
-            className={`glass-hud flex items-center gap-3 px-4 py-2.5 transition-[border-color,box-shadow] duration-500 ${
-              state === 'ai' ? '!border-danger/45 shadow-[0_0_40px_rgba(251,113,133,0.18)]' : state === 'player' || state === 'aim' ? '!border-accent/40 shadow-[0_0_40px_rgba(154,167,255,0.16)]' : ''
-            }`}
-            role="status"
-          >
-            <span className={`live-dot ${turnCopy.tone}`} aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <div className={`truncate text-[0.95rem] font-bold tracking-tight ${turnCopy.tone}`}>{turnCopy.label}</div>
-              <div className="truncate text-[0.7rem] text-white/60">{turnCopy.sub}</div>
-            </div>
-            <div className="text-right">
-              <div className="label-caps !text-[0.625rem]">Turn</div>
-              <div className="num text-lg font-bold leading-none text-white">{Math.max(turn, 1)}</div>
-            </div>
-          </GlassPanel>
-          {state === 'ai' && <div className="scan-bar mx-4 -mt-px text-danger" aria-hidden="true" />}
-        </FadeIn>
-        <div className="h-9" aria-live="polite">
-          <AnimatePresence mode="wait">
-            {lastOutcome && lastEvent && (
-              <motion.div
-                key={lastOutcome.seq}
-                initial={{ opacity: 0, y: reducedMotion ? 0 : -6, scale: reducedMotion ? 1 : 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: reducedMotion ? 0 : 6 }}
-                transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                className={`chip border-white/15 bg-[#050e1b]/80 px-4 py-1.5 text-sm backdrop-blur-xl ${TONE_CLASS[toneOf(lastEvent)]}`}
-              >
-                <span className="label-caps !text-[0.625rem] !text-white/55">{lastOutcome.by === 'player' ? 'You' : 'Legacy'}</span>
-                <span className="num font-mono text-xs text-white/70">{cellName(lastEvent.coord)}</span>
-                <span className="font-semibold">{lastOutcome.text}</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
+      {/* ---------- desktop: compact turn banner ---------- */}
+      <FadeIn from="above" className="absolute left-1/2 top-5 hidden w-[19rem] -translate-x-1/2 lg:block">
+        <GlassPanel className={`glass-hud flex items-center gap-3 px-4 py-2 transition-[border-color,box-shadow] duration-500 ${bannerGlow}`} role="status">
+          <span className={`live-dot ${turnCopy.tone}`} aria-hidden="true" />
+          <div className="min-w-0 flex-1 leading-tight">
+            <div className={`truncate text-[0.9rem] font-bold tracking-tight ${turnCopy.tone}`}>{turnCopy.label}</div>
+            <div className="truncate text-[0.68rem] text-white/55">{turnCopy.sub}</div>
+          </div>
+          <div className="flex items-baseline gap-1.5 border-l border-white/10 pl-3">
+            <span className="label-caps !text-[0.55rem]">Turn</span>
+            <span className="num text-lg font-bold leading-none text-white">{Math.max(turn, 1)}</span>
+          </div>
+        </GlassPanel>
+        {state === 'ai' && <div className="scan-bar mx-4 -mt-px text-danger" aria-hidden="true" />}
+      </FadeIn>
 
-      {/* left rail: own fleet */}
-      <FadeIn from="left" delay={0.06} className="absolute left-5 top-28 hidden w-64 lg:block xl:w-72">
-        <GlassPanel className="glass-hud p-4">
-          <div className="mb-3 flex items-baseline justify-between">
-            <span className="label-caps text-accent">Your fleet</span>
-            <span className="num text-xs text-white/60">
+      {/* ---------- desktop: own fleet rail ---------- */}
+      <FadeIn from="left" delay={0.06} className="absolute left-5 top-[5.25rem] hidden w-60 lg:block xl:w-64">
+        <GlassPanel className="glass-hud px-3.5 py-3">
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="label-caps !text-[0.625rem] text-accent">Your fleet</span>
+            <span className="num text-[0.7rem] text-white/60">
               <span className="font-bold text-white">{playerAfloat}</span>/5 afloat
             </span>
           </div>
-          <ul className="space-y-2.5">
+          <ul className="space-y-1.5">
             {FLEET.map((f) => (
               <FleetRow key={f.id} name={f.name} length={f.length} ship={match.player.ships.find((s) => s.spec.id === f.id)} own />
             ))}
           </ul>
-          <div className="divider my-4" />
-          <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="mt-2.5 grid grid-cols-3 gap-1 border-t border-white/8 pt-2 text-center">
             <MiniStat label="Shots" value={playerShots.length} />
             <MiniStat label="Hits" value={playerHits} accent="text-ember" />
             <MiniStat label="Acc." value={`${accuracy}%`} />
@@ -265,100 +290,95 @@ export function BattleScreen() {
         </GlassPanel>
       </FadeIn>
 
-      {/* right rail: enemy backlog + comms */}
-      <FadeIn from="right" delay={0.06} className="absolute right-5 top-28 hidden w-64 lg:block xl:w-72">
-        <GlassPanel className="glass-hud p-4">
-          <div className="mb-3 flex items-baseline justify-between">
-            <span className="label-caps text-danger">Enemy backlog</span>
-            <span className="num text-xs text-white/60">
+      {/* ---------- desktop: enemy backlog + comms rail ---------- */}
+      <FadeIn from="right" delay={0.06} className="absolute right-5 top-5 hidden w-60 lg:block xl:w-64">
+        <GlassPanel className="glass-hud px-3.5 py-3">
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="label-caps !text-[0.625rem] text-danger">Enemy backlog</span>
+            <span className="num text-[0.7rem] text-white/60">
               <span className="font-bold text-white">{enemySunk}</span>/5 closed
             </span>
           </div>
-          <ul className="space-y-2.5">
+          <ul className="space-y-1.5">
             {FLEET.map((f) => (
               <FleetRow key={f.id} name={ENEMY_FLEET_NAMES[f.id]} length={f.length} ship={match.enemy.ships.find((s) => s.spec.id === f.id)} />
             ))}
           </ul>
-          <div className="divider my-4" />
-          <div className="mb-2 flex items-baseline justify-between">
-            <span className="label-caps">Comms log</span>
-            <span className="num text-[0.7rem] text-white/50">
-              Legacy {aiHits}/{aiShots.length}
-            </span>
-          </div>
-          <ol className="space-y-1.5 text-xs" aria-label="Recent shots">
-            {recent.length === 0 && <li className="text-white/50">No traffic yet. Take the first shot.</li>}
-            {recent.map((ev, i) => (
-              <li key={match.log.length - i} className={`flex items-center gap-2 ${i === 0 ? '' : 'opacity-70'}`}>
-                <span
-                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${ev.by === 'player' ? 'bg-accent' : 'bg-danger'}`}
-                  aria-hidden="true"
-                />
-                <span className="num w-7 shrink-0 font-mono text-white/60">{cellName(ev.coord)}</span>
-                <span className={`truncate font-medium ${TONE_CLASS[toneOf(ev)]}`}>{logLine(ev)}</span>
-              </li>
-            ))}
-          </ol>
-        </GlassPanel>
-      </FadeIn>
-
-      {/* compact score for narrow screens */}
-      <FadeIn from="above" className="absolute right-4 top-4 lg:hidden">
-        <GlassPanel className="glass-hud px-3 py-2 text-right">
-          <div className="label-caps !text-[0.625rem]">Afloat</div>
-          <div className="num text-sm font-bold">
-            <span className="text-accent">{playerAfloat}</span>
-            <span className="text-white/45"> vs </span>
-            <span className="text-danger">{5 - enemySunk}</span>
-          </div>
-        </GlassPanel>
-      </FadeIn>
-
-      {/* bottom: fire control dock */}
-      <FadeIn delay={0.1} className="absolute inset-x-0 bottom-4 flex justify-center px-3 sm:bottom-5">
-        <GlassPanel strong className="pointer-events-auto flex w-full max-w-2xl items-center gap-3 rounded-2xl p-2.5 pl-4">
-          <div className="hidden min-w-0 flex-1 sm:block">
-            <div className="label-caps !text-[0.625rem]">Firing solution</div>
-            <div className="flex items-baseline gap-2">
-              <span className={`num font-mono text-2xl font-bold ${target ? 'text-white' : 'text-white/30'}`}>
-                {target ? cellName(target) : '—'}
-              </span>
-              <span className="truncate text-xs text-white/55">
-                {target ? (
-                  <>
-                    <Kbd>Enter</Kbd> to fire
-                  </>
-                ) : (
-                  <>
-                    Click a cell or use <Kbd>←</Kbd>
-                    <Kbd>→</Kbd>
-                  </>
-                )}
+          <div className="mt-2.5 border-t border-white/8 pt-2">
+            <div className="mb-1 flex items-baseline justify-between">
+              <span className="label-caps !text-[0.575rem]">Comms log</span>
+              <span className="num text-[0.65rem] text-white/50">
+                Legacy {aiHits}/{aiShots.length}
               </span>
             </div>
+            <ol className="space-y-1 text-[0.7rem]" aria-label="Recent shots">
+              {recent.length === 0 && <li className="text-white/50">No traffic yet. Take the first shot.</li>}
+              {recent.map((ev, i) => (
+                <li key={match.log.length - i} className={`flex items-center gap-2 ${i === 0 ? '' : 'opacity-65'}`}>
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${ev.by === 'player' ? 'bg-accent' : 'bg-danger'}`} aria-hidden="true" />
+                  <span className="num w-7 shrink-0 font-mono text-white/60">{cellName(ev.coord)}</span>
+                  <span className={`truncate font-medium ${TONE_CLASS[toneOf(ev)]}`}>{logLine(ev)}</span>
+                </li>
+              ))}
+            </ol>
           </div>
-          <GlassButton onClick={togglePause} className="!px-3.5 !py-2.5" aria-label="Pause (P)" title="Pause (P)">
+        </GlassPanel>
+      </FadeIn>
+
+      {/* ---------- bottom: latest outcome + fire control dock ---------- */}
+      <FadeIn
+        delay={0.1}
+        className="absolute inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col items-center gap-1.5 px-3 sm:bottom-5"
+      >
+        {outcomeChip}
+        <GlassPanel strong className="pointer-events-auto flex w-full max-w-[44rem] items-center gap-2 rounded-2xl p-2 sm:gap-2.5 sm:p-2.5 sm:pl-4">
+          <div className="hidden shrink-0 items-center gap-3 pr-1 sm:flex">
+            <div className="leading-tight">
+              <div className="label-caps !text-[0.575rem]">Target</div>
+              <div className={`num w-12 font-mono text-2xl font-bold leading-none ${target ? 'text-white' : 'text-white/30'}`}>
+                {target ? cellName(target) : '—'}
+              </div>
+            </div>
+            <div className="whitespace-nowrap text-[0.7rem] leading-snug text-white/55">
+              {target ? (
+                <>
+                  <Kbd>Enter</Kbd> fire
+                  <br />
+                  <Kbd>Esc</Kbd> clear
+                </>
+              ) : (
+                <>
+                  Click a cell
+                  <br />
+                  or aim with <Kbd>↑↓←→</Kbd>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="hidden flex-1 sm:block" />
+          <GlassButton onClick={togglePause} className="shrink-0 whitespace-nowrap !px-3 !py-2.5" aria-label="Pause (P)" title="Pause (P)">
             Pause
           </GlassButton>
-          <GlassButton onClick={askDeepWiki} hotkey="Q" className="!px-3.5 !py-2.5">
-            Ask DeepWiki
+          <GlassButton onClick={askDeepWiki} hotkey="Q" className="shrink-0 whitespace-nowrap !px-3 !py-2.5" aria-label="Ask DeepWiki (Q)">
+            <span className="sm:hidden">DeepWiki</span>
+            <span className="hidden sm:inline">Ask DeepWiki</span>
           </GlassButton>
           <GlassButton
             variant={confirmConcede ? 'danger' : 'ghost'}
             onClick={() => (confirmConcede ? concede() : setConfirmConcede(true))}
             disabled={turnLock || aiThinking}
-            className="!px-3.5 !py-2.5"
+            className="shrink-0 whitespace-nowrap !px-3 !py-2.5"
           >
-            {confirmConcede ? 'Confirm concede' : 'Concede'}
+            {confirmConcede ? 'Confirm?' : 'Concede'}
           </GlassButton>
           <GlassButton
             variant="primary"
-            className="!px-7 !py-3 text-base"
+            className="min-w-0 flex-1 whitespace-nowrap !px-4 !py-3 text-base sm:min-w-[9.5rem] sm:flex-none sm:!px-6"
             disabled={!target || turnLock || aiThinking}
             onClick={confirmFire}
             aria-label={target ? `Fire at ${cellName(target)}` : 'Select a target first'}
           >
-            {target ? `Fire ${cellName(target)}` : aiThinking ? 'Enemy turn' : 'Select target'}
+            {target ? `Fire ${cellName(target)}` : aiThinking ? 'Enemy turn' : firing ? 'Inbound…' : 'Pick target'}
           </GlassButton>
         </GlassPanel>
       </FadeIn>
@@ -369,7 +389,7 @@ export function BattleScreen() {
             initial={{ opacity: 0, y: reducedMotion ? 0 : 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: reducedMotion ? 0 : 8 }}
-            className="glass glass-strong absolute bottom-28 left-1/2 z-50 w-[min(90vw,32rem)] -translate-x-1/2 px-5 py-4"
+            className="glass glass-strong absolute bottom-32 left-1/2 z-50 w-[min(92vw,32rem)] -translate-x-1/2 px-5 py-4"
             role="status"
           >
             <div className="mb-2 flex items-center justify-between">
@@ -393,27 +413,48 @@ function FleetRow({ name, length, ship, own = false }: { name: string; length: n
   const pipClass = (i: number) =>
     sunk ? 'pip-dead' : own ? (i < hits ? 'pip-hit' : 'pip-ok') : 'pip-accent opacity-70';
   const status = sunk ? (own ? 'Lost' : 'Closed') : own && hits > 0 ? 'Damaged' : own ? 'Nominal' : 'Open';
-  const statusClass = sunk ? (own ? 'text-danger' : 'text-success') : own && hits > 0 ? 'text-ember' : 'text-white/50';
+  const statusClass = sunk ? (own ? 'text-danger' : 'text-success') : own && hits > 0 ? 'text-ember' : 'text-white/45';
   return (
     <li className={sunk ? 'opacity-75' : ''}>
-      <div className="mb-1 flex items-baseline justify-between gap-2">
-        <span className={`truncate text-[0.8rem] font-semibold ${sunk ? 'text-white/55 line-through decoration-danger/70' : 'text-white'}`}>{name}</span>
-        <span className={`text-[0.625rem] font-semibold uppercase tracking-[0.14em] ${statusClass}`}>{status}</span>
+      <div className="mb-0.5 flex items-baseline justify-between gap-2">
+        <span className={`truncate text-[0.75rem] font-semibold ${sunk ? 'text-white/55 line-through decoration-danger/70' : 'text-white'}`}>{name}</span>
+        <span className={`text-[0.55rem] font-semibold uppercase tracking-[0.14em] ${statusClass}`}>{status}</span>
       </div>
-      <div className="flex gap-1" aria-hidden="true">
+      <div className="flex gap-0.5" aria-hidden="true">
         {Array.from({ length }).map((_, i) => (
-          <span key={i} className={`pip !h-1 ${pipClass(i)}`} />
+          <span key={i} className={`pip !h-[3px] ${pipClass(i)}`} />
         ))}
       </div>
     </li>
   );
 }
 
+/** One-line fleet summary for the compact HUD: a bar per ship, sized by length. */
+function FleetGauge({ label, tone, value, ships, own = false }: { label: string; tone: string; value: string; ships: PlacedShip[]; own?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-1 flex items-baseline justify-between gap-1">
+        <span className={`label-caps !text-[0.55rem] ${tone}`}>{label}</span>
+        <span className="num text-[0.65rem] text-white/60">
+          <span className="font-bold text-white">{value.split('/')[0]}</span>/5 {own ? 'afloat' : 'closed'}
+        </span>
+      </div>
+      <div className="flex gap-0.5" aria-hidden="true">
+        {FLEET.map((f) => {
+          const s = ships.find((p) => p.spec.id === f.id);
+          const cls = s?.sunk ? 'pip-dead' : own ? ((s?.hits ?? 0) > 0 ? 'pip-hit' : 'pip-ok') : 'pip-accent opacity-70';
+          return <span key={f.id} className={`pip !h-1 ${cls}`} style={{ flexGrow: f.length }} />;
+        })}
+      </div>
+    </div>
+  );
+}
+
 function MiniStat({ label, value, accent = 'text-white' }: { label: string; value: number | string; accent?: string }) {
   return (
     <div>
-      <div className={`num text-lg font-bold leading-tight ${accent}`}>{value}</div>
-      <div className="label-caps !text-[0.625rem] !tracking-[0.12em]">{label}</div>
+      <div className={`num text-base font-bold leading-tight ${accent}`}>{value}</div>
+      <div className="label-caps !text-[0.55rem] !tracking-[0.12em]">{label}</div>
     </div>
   );
 }

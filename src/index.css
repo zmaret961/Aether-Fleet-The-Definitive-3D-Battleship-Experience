@@ -387,3 +387,162 @@ body,
 }
 
 canvas { display: block; }
+
+/* ---- Collectible commander cards ---- */
+@layer components {
+  .holo-card {
+    --rx: 0deg;
+    --ry: 0deg;
+    --mx: 50%;
+    --my: 30%;
+    --shine: 0;
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    padding: 0.6rem 0.6rem 1rem;
+    border-radius: 1.25rem;
+    border: 1px solid color-mix(in srgb, var(--hue-from) 28%, rgba(255, 255, 255, 0.1));
+    background:
+      linear-gradient(165deg, color-mix(in srgb, var(--hue-to) 16%, transparent), transparent 45%),
+      linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01) 45%),
+      rgba(5, 12, 26, 0.94);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      0 18px 50px rgba(0, 0, 0, 0.5);
+    transform: perspective(900px) rotateX(var(--rx)) rotateY(var(--ry));
+    transition:
+      transform 0.5s var(--ease-out-expo),
+      box-shadow 0.35s ease,
+      border-color 0.35s ease;
+    will-change: transform;
+  }
+  .holo-card:hover {
+    transition:
+      transform 0.12s linear,
+      box-shadow 0.35s ease,
+      border-color 0.35s ease;
+    border-color: color-mix(in srgb, var(--hue-from) 60%, transparent);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.25),
+      0 28px 70px rgba(0, 0, 0, 0.55),
+      0 0 46px var(--hue-glow);
+  }
+  .holo-card.is-selected {
+    border-color: var(--hue-from);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--hue-from) 45%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25),
+      0 24px 60px rgba(0, 0, 0, 0.5),
+      0 0 56px var(--hue-glow);
+  }
+  .holo-art {
+    background:
+      radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--hue-to) 55%, transparent), transparent 70%),
+      linear-gradient(180deg, #0b1236, #050a1c);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--hue-from) 30%, transparent),
+      inset 0 -30px 60px rgba(0, 0, 0, 0.45);
+  }
+  .holo-art-grid {
+    opacity: 0.35;
+    background-image:
+      linear-gradient(color-mix(in srgb, var(--hue-from) 28%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--hue-from) 28%, transparent) 1px, transparent 1px);
+    background-size: 16px 16px;
+    background-position: center;
+    -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 20%, transparent 75%);
+    mask-image: radial-gradient(circle at 50% 50%, #000 20%, transparent 75%);
+  }
+  .holo-emblem {
+    filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 18px var(--hue-glow));
+    transform: translateZ(0) scale(1);
+    transition: transform 0.6s var(--ease-spring);
+  }
+  .holo-card:hover .holo-emblem,
+  .holo-card.is-selected .holo-emblem {
+    transform: scale(1.06);
+  }
+  .holo-rule {
+    height: 1px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--hue-from) 60%, transparent), transparent);
+  }
+  /* specular glare that follows the pointer + a faint prismatic foil band */
+  .holo-shine {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: calc(0.25 + var(--shine) * 0.75);
+    background:
+      radial-gradient(circle at var(--mx) var(--my), rgba(255, 255, 255, 0.24), transparent 42%),
+      linear-gradient(
+        115deg,
+        transparent 30%,
+        rgba(255, 119, 198, calc(var(--shine) * 0.1)) 42%,
+        rgba(120, 220, 255, calc(var(--shine) * 0.12)) 50%,
+        rgba(255, 236, 140, calc(var(--shine) * 0.1)) 58%,
+        transparent 70%
+      );
+    background-size: 100% 100%, 220% 220%;
+    background-position: 0 0, var(--mx) var(--my);
+    mix-blend-mode: screen;
+    transition: opacity 0.35s ease;
+  }
+}
+.reduced-motion .holo-card { transform: none; }
+
+/* ---- Main menu hero card ---- */
+@layer components {
+  .menu-hero {
+    background:
+      radial-gradient(120% 80% at 50% 0%, rgba(81, 70, 255, 0.18), transparent 60%),
+      linear-gradient(180deg, rgba(6, 14, 34, 0.5), rgba(6, 14, 34, 0.28));
+    backdrop-filter: blur(8px) saturate(1.4);
+    -webkit-backdrop-filter: blur(8px) saturate(1.4);
+    border-color: rgba(195, 204, 255, 0.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      0 30px 90px rgba(0, 0, 0, 0.45),
+      0 0 80px rgba(81, 70, 255, 0.12);
+  }
+  /* targeting-reticle corners framing the title */
+  .hud-corners::after {
+    --c: rgba(195, 204, 255, 0.55);
+    --l: 22px;
+    content: '';
+    position: absolute;
+    inset: 12px;
+    pointer-events: none;
+    background:
+      linear-gradient(var(--c), var(--c)) top left / var(--l) 1.5px no-repeat,
+      linear-gradient(var(--c), var(--c)) top left / 1.5px var(--l) no-repeat,
+      linear-gradient(var(--c), var(--c)) top right / var(--l) 1.5px no-repeat,
+      linear-gradient(var(--c), var(--c)) top right / 1.5px var(--l) no-repeat,
+      linear-gradient(var(--c), var(--c)) bottom left / var(--l) 1.5px no-repeat,
+      linear-gradient(var(--c), var(--c)) bottom left / 1.5px var(--l) no-repeat,
+      linear-gradient(var(--c), var(--c)) bottom right / var(--l) 1.5px no-repeat,
+      linear-gradient(var(--c), var(--c)) bottom right / 1.5px var(--l) no-repeat;
+  }
+  .hero-sweep {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, 0.07) 50%, transparent 58%);
+    background-size: 260% 100%;
+    background-position: 130% 0;
+    animation: hero-sweep 7s cubic-bezier(0.45, 0, 0.2, 1) 1.2s infinite;
+  }
+  .hero-title {
+    filter: drop-shadow(0 0 40px rgba(81, 70, 255, 0.35)) drop-shadow(0 2px 0 rgba(0, 0, 0, 0.35));
+  }
+}
+@keyframes hero-sweep {
+  0% { background-position: 130% 0; }
+  45%, 100% { background-position: -30% 0; }
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(195, 204, 255, 0.25) transparent;
+}

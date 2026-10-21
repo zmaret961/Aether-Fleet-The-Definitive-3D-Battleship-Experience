@@ -473,7 +473,7 @@ export function EffectsLayer() {
   useEffect(
     () =>
       fx.subscribe((e) => {
-        if (e.type === 'marker') return; // markers come from board state, not fx
+        if (e.type === 'marker' || e.type === 'bossMood') return; // markers come from board state, not fx
         const birth = fxNow();
         const pos = cellWorld(e.side, e.coord);
         const item: Item = { id: nextId++, kind: e.type, birth, life: LIFE[e.type], side: e.side, pos };
