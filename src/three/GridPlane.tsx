@@ -23,25 +23,26 @@ const FRAG = /* glsl */ `
     vec2 g = vUv * uGrid;
     // distance to the nearest cell border (g integer = border), not cell center
     vec2 d = abs(fract(g + 0.5) - 0.5);
-    float fw = max(fwidth(g.x), fwidth(g.y));
-    float m = min(d.x, d.y);
-    float line = 1.0 - smoothstep(0.0, 0.03 + fw * 1.2, m);
-    float glow = (1.0 - smoothstep(0.0, 0.16, m)) * 0.25;
-    // tiny cross ticks at every intersection
-    float cross = (1.0 - smoothstep(0.0, 0.05 + fw, max(d.x, d.y))) * 0.6;
+    vec2 fw = max(fwidth(g), vec2(1e-4));
+    // hairline: ~1px anti-aliased line in screen space, whatever the zoom
+    vec2 px = d / fw;
+    float line = 1.0 - smoothstep(0.35, 1.25, min(px.x, px.y));
+    // small "+" ticks at intersections give the plotting-table read
+    float tick = (1.0 - smoothstep(0.0, 0.07, max(d.x, d.y))) * (1.0 - smoothstep(0.6, 1.6, min(px.x, px.y)));
 
-    // soft radial vignette across the panel keeps the centre crisp
     vec2 c = vUv - 0.5;
-    float vig = 1.0 - dot(c, c) * 0.9;
+    float vig = 1.0 - dot(c, c) * 1.1;
 
-    // slow sweeping sonar band
-    float sweep = fract(uTime * 0.07 * uScan);
-    float band = smoothstep(0.08, 0.0, abs(vUv.y - sweep)) * 0.18 * uScan;
+    // slow sonar sweep: a thin bright leading edge with a short fading tail
+    float sweep = fract(uTime * 0.06 * uScan);
+    float dy = sweep - vUv.y;
+    float band = (smoothstep(0.0, 0.004, dy) * (1.0 - smoothstep(0.0, 0.12, dy))) * 0.1 * uScan;
 
-    float alpha = (line * 0.42 + glow * 0.7 + cross * 0.8) * vig + band * (0.4 + line);
-    // faint glassy panel tint so the board reads as a distinct surface
-    alpha += 0.05 * vig;
-    vec3 col = uLine * (0.6 + line * 0.35 + cross * 0.6);
+    float alpha = line * 0.5 * vig + tick * 0.55 + band * (0.35 + line * 1.5);
+    // faint glassy tint so the board reads as a surface
+    alpha += 0.035 * vig;
+    // stays below the bloom threshold: crisp lines, no Tron haze
+    vec3 col = uLine * (0.55 + tick * 0.25 + band);
     gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
   }
 `;

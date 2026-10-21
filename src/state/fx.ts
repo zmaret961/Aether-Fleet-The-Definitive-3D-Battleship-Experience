@@ -7,6 +7,8 @@ import type { Coord } from '../game/types';
 export type BoardSide = 'player' | 'enemy';
 export type BossMood = 'smug' | 'laugh' | 'hurt' | 'rage' | 'gloat' | 'charge' | 'dead' | 'victory';
 
+export type BossMood = 'smug' | 'laugh' | 'hurt' | 'rage' | 'gloat' | 'charge' | 'dead' | 'victory';
+
 export type FxEvent =
   | { type: 'sonar'; coord: Coord; side: BoardSide }
   | { type: 'missile'; coord: Coord; side: BoardSide }

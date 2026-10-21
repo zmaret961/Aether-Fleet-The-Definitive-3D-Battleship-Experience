@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { PlacedShip } from '../game/types';
+import type { Coord, PlacedShip } from '../game/types';
 import { cellToWorld, PALETTE } from './config';
 
 type Mats = {
@@ -296,21 +296,247 @@ const CLASSES: Record<string, (p: { m: Mats; L: number }) => ReactNode> = {
   destroyer: Destroyer,
 };
 
+const DECK_Y: Record<string, number> = { carrier: 0.445, battleship: 0.255, cruiser: 0.245, submarine: 0.27, destroyer: 0.225 };
+
+let softTex: THREE.Texture | null = null;
+/** Shared soft round puff used by smoke and fire sprites. */
+function puffTexture() {
+  if (softTex) return softTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  if (g) {
+    const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grd.addColorStop(0, 'rgba(255,255,255,1)');
+    grd.addColorStop(0.45, 'rgba(255,255,255,0.55)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 64, 64);
+  }
+  softTex = new THREE.CanvasTexture(c);
+  return softTex;
+}
+
+const SCORCH_FRAG = /* glsl */ `
+  uniform float uTime;
+  uniform float uSeed;
+  varying vec2 vUv;
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + uSeed) * 43758.5453); }
+  float vnoise(vec2 p) {
+    vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+  }
+  void main() {
+    vec2 c = vUv * 2.0 - 1.0;
+    float n = vnoise(vUv * 6.0) * 0.6 + vnoise(vUv * 13.0) * 0.4;
+    float r = length(c) + (n - 0.5) * 0.5;
+    float soot = 1.0 - smoothstep(0.35, 0.95, r);
+    // embers glow in the cracks near the impact centre
+    float ember = (1.0 - smoothstep(0.0, 0.45, r)) * smoothstep(0.55, 0.8, n) * (0.6 + 0.4 * sin(uTime * 5.0 + n * 20.0));
+    vec3 col = mix(vec3(0.03, 0.025, 0.02), vec3(1.4, 0.45, 0.08), ember);
+    gl_FragColor = vec4(col, clamp(soot * 0.92 + ember, 0.0, 1.0));
+  }
+`;
+const PLAIN_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+`;
+
+function Scorch({ x, y, seed }: { x: number; y: number; seed: number }) {
+  const mat = useRef<THREE.ShaderMaterial>(null);
+  const uniforms = useMemo(() => ({ uTime: { value: 0 }, uSeed: { value: seed } }), [seed]);
+  useFrame((_, dt) => {
+    if (mat.current) mat.current.uniforms.uTime.value += dt;
+  });
+  return (
+    <mesh position={[x, y, 0]} rotation={[-Math.PI / 2, 0, seed]} renderOrder={3}>
+      <planeGeometry args={[0.78, 0.6]} />
+      <shaderMaterial
+        ref={mat}
+        vertexShader={PLAIN_VERT}
+        fragmentShader={SCORCH_FRAG}
+        uniforms={uniforms}
+        transparent
+        depthWrite={false}
+        polygonOffset
+        polygonOffsetFactor={-4}
+        toneMapped={false}
+      />
+    </mesh>
+  );
+}
+
+const PUFFS = 7;
+const SMOKE_LIFE = 3.4;
+
+/**
+ * Smoke columns rising from hit segments, plus a flickering fire core. Lives in
+ * board-aligned space so every column leans with the same wind.
+ */
+function DamageSmoke({ points, y, fading }: { points: [number, number][]; y: number; fading: boolean }) {
+  const smoke = useRef<(THREE.Sprite | null)[]>([]);
+  const fire = useRef<(THREE.Sprite | null)[]>([]);
+  const age = useRef(0);
+  const smokeMats = useMemo(
+    () =>
+      points.flatMap(() =>
+        Array.from({ length: PUFFS }, () => new THREE.SpriteMaterial({ map: puffTexture(), color: '#3a4048', transparent: true, depthWrite: false, opacity: 0 })),
+      ),
+    [points],
+  );
+  const fireMat = useMemo(
+    () => new THREE.SpriteMaterial({ map: puffTexture(), color: '#ff8a2a', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
+    [],
+  );
+  useFrame((_, dt) => {
+    age.current += dt;
+    const t = performance.now() / 1000;
+    const strength = fading ? Math.max(0, 1 - age.current / 7) : 1;
+    points.forEach(([px, pz], i) => {
+      for (let k = 0; k < PUFFS; k++) {
+        const sp = smoke.current[i * PUFFS + k];
+        if (!sp) continue;
+        const life = ((t + (k / PUFFS) * SMOKE_LIFE + i * 0.37) % SMOKE_LIFE) / SMOKE_LIFE;
+        const rise = life * 1.7;
+        sp.position.set(px + rise * rise * 0.32 + Math.sin(t * 1.3 + k) * 0.04, y + 0.12 + rise, pz - rise * 0.16);
+        sp.scale.setScalar(0.22 + life * 0.75);
+        const m = sp.material as THREE.SpriteMaterial;
+        m.opacity = Math.sin(Math.PI * Math.min(life * 1.25, 1)) * 0.55 * strength;
+        m.color.setScalar(0.16 + life * 0.22);
+      }
+      const f = fire.current[i];
+      if (f) {
+        const flick = 0.8 + 0.2 * Math.sin(t * 17 + i * 3) * Math.sin(t * 11.3 + i);
+        f.scale.set(0.3 * flick, 0.42 * flick, 1);
+        f.position.set(px, y + 0.14, pz);
+        (f.material as THREE.SpriteMaterial).opacity = 0.85 * strength * (fading ? 0.6 : 1);
+      }
+    });
+  });
+  return (
+    <group>
+      {points.map((_, i) => (
+        <group key={i}>
+          {Array.from({ length: PUFFS }, (_, k) => (
+            <sprite key={k} ref={(el) => { smoke.current[i * PUFFS + k] = el; }} material={smokeMats[i * PUFFS + k]} renderOrder={6} />
+          ))}
+          <sprite ref={(el) => { fire.current[i] = el; }} material={fireMat} renderOrder={7} />
+        </group>
+      ))}
+    </group>
+  );
+}
+
+const FOAM_RING_FRAG = /* glsl */ `
+  uniform float uAge;
+  varying vec2 vUv;
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float vnoise(vec2 p) {
+    vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+  }
+  void main() {
+    vec2 c = vUv * 2.0 - 1.0;
+    float r = length(c);
+    float k = clamp(uAge / 4.5, 0.0, 1.0);
+    float front = 0.25 + k * 0.7;
+    float n = vnoise(c * 7.0 + uAge * 0.6) * 0.7 + vnoise(c * 17.0) * 0.3;
+    float ring = smoothstep(front - 0.2 - k * 0.1, front - 0.02, r) * (1.0 - smoothstep(front, front + 0.04, r));
+    float churn = (1.0 - smoothstep(0.0, front * 0.8, r)) * (1.0 - k) * 0.6;
+    float lace = smoothstep(0.35, 0.7, n);
+    float residue = (1.0 - smoothstep(0.55, 0.95, r)) * smoothstep(0.5, 0.8, n) * 0.16;
+    float a = (ring * (1.0 - k * 0.75) + churn) * lace + residue * smoothstep(0.2, 1.0, k);
+    gl_FragColor = vec4(vec3(0.82, 0.92, 0.98), clamp(a, 0.0, 1.0) * 0.85);
+  }
+`;
+
+/** Expanding foam ring and churned water where a ship goes down, leaving a faint slick. */
+function SinkFoam({ L }: { L: number }) {
+  const mat = useRef<THREE.ShaderMaterial>(null);
+  const uniforms = useMemo(() => ({ uAge: { value: 0 } }), []);
+  useFrame((_, dt) => {
+    if (mat.current) mat.current.uniforms.uAge.value += dt;
+  });
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]} scale={[L * 0.72 + 0.4, 0.95, 1]} renderOrder={4}>
+      <planeGeometry args={[2, 2]} />
+      <shaderMaterial ref={mat} vertexShader={PLAIN_VERT} fragmentShader={FOAM_RING_FRAG} uniforms={uniforms} transparent depthWrite={false} />
+    </mesh>
+  );
+}
+
+const KELVIN_FRAG = /* glsl */ `
+  uniform float uTime;
+  varying vec2 vUv;
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float vnoise(vec2 p) {
+    vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+  }
+  void main() {
+    // u: 0 at the stern -> 1 far astern; v: -1..1 across
+    float u = vUv.x;
+    float v = vUv.y * 2.0 - 1.0;
+    // streaky turbulence stretched along the flow, never clumped into blobs
+    float n = vnoise(vec2(u * 70.0 - uTime * 2.4, v * 46.0)) * 0.55 + vnoise(vec2(u * 140.0 - uTime * 3.1, v * 90.0)) * 0.45;
+    // Kelvin arms (~19.5 degrees) that widen and soften with distance + a narrow prop wash
+    float arm = 1.0 - smoothstep(0.0, 0.025 + u * 0.06, abs(abs(v) - u * 0.7 - 0.05));
+    float wash = (1.0 - smoothstep(0.0, 0.05 + u * 0.12, abs(v))) * (1.0 - smoothstep(0.0, 0.55, u));
+    float fade = (1.0 - smoothstep(0.2, 1.0, u)) * smoothstep(0.0, 0.03, u);
+    float a = (arm * 0.5 + wash * 0.65) * (0.45 + 0.55 * n) * fade;
+    gl_FragColor = vec4(vec3(0.8, 0.9, 0.97), a * 0.4);
+  }
+`;
+
+/** V-shaped wake trailing astern of a ship that is underway (hero shots). */
+function KelvinWake({ L }: { L: number }) {
+  const mat = useRef<THREE.ShaderMaterial>(null);
+  const uniforms = useMemo(() => ({ uTime: { value: Math.random() * 10 } }), []);
+  useFrame((_, dt) => {
+    if (mat.current) mat.current.uniforms.uTime.value += dt;
+  });
+  const len = L * 3.4 + 3;
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-L / 2 - len / 2 + 0.25, 0.02, 0]} renderOrder={2}>
+      <planeGeometry args={[len, len * 0.72]} />
+      <shaderMaterial
+        ref={mat}
+        vertexShader={/* glsl */ `
+          varying vec2 vUv;
+          void main() { vUv = vec2(1.0 - uv.x, uv.y); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+        `}
+        fragmentShader={KELVIN_FRAG}
+        uniforms={uniforms}
+        transparent
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
 /**
  * Per-class warship built from extruded hulls and primitives: carrier flight
  * deck + island, battleship triple turrets, cruiser VLS + radar dome, a
- * low-slung submarine and a nimble destroyer. Sunk ships char, list and submerge.
+ * low-slung submarine and a nimble destroyer. Hit segments scorch and smoke,
+ * damaged ships list toward the damage, sunk ships char, roll and settle
+ * into a foam ring.
  */
 export function ShipMesh({
   ship,
   ghost = false,
   valid = true,
   side = 'player',
+  hitCells,
+  underway = false,
 }: {
   ship: PlacedShip;
   ghost?: boolean;
   valid?: boolean;
   side?: 'player' | 'enemy';
+  /** Cells of this ship that have been hit (drives scorch, smoke and listing). */
+  hitCells?: Coord[];
+  /** Sailing in open water (menu hero shots): draws a V wake astern. */
+  underway?: boolean;
 }) {
   const group = useRef<THREE.Group>(null);
   const sinkT = useRef(0);
@@ -328,38 +554,63 @@ export function ShipMesh({
     };
   }, [ship]);
 
+  const hitKey = hitCells?.map((c) => `${c.x},${c.y}`).join('|') ?? '';
+  const damage = useMemo(() => {
+    if (!hitKey) return { local: [] as number[], world: [] as [number, number][] };
+    const cells = hitKey.split('|').map((k) => k.split(',').map(Number) as [number, number]);
+    const world = cells.map(([x, y]) => {
+      const [wx, wz] = cellToWorld({ x, y });
+      return [wx - center[0], wz - center[1]] as [number, number];
+    });
+    // ship-local x along the hull (rotation y by +90deg maps local +x to world -z)
+    const local = world.map(([dx, dz]) => (angle === 0 ? dx : -dz) * 0.9);
+    return { local, world };
+  }, [hitKey, center, angle]);
+
+  const frac = Math.min(damage.local.length / len, 1);
+  const lean = damage.local.length ? damage.local.reduce((a, b) => a + b, 0) / damage.local.length : 0;
+
   useFrame((_, dt) => {
     if (!group.current) return;
-    if (ship.sunk) {
-      sinkT.current = Math.min(sinkT.current + dt, 8);
-      const t = sinkT.current;
-      group.current.position.y = -Math.min(t * 0.32, 1.8);
-      group.current.rotation.z = Math.min(t * 0.16, 0.55);
-      group.current.rotation.x = Math.min(t * 0.1, 0.35);
+    const t = performance.now() / 1000;
+    const ph = center[0] * 0.7 + center[1] * 0.5;
+    if (ship.sunk && !ghost) {
+      sinkT.current = Math.min(sinkT.current + dt, 10);
+      const k = sinkT.current;
+      // brief lurch, then roll over and settle as a half-submerged wreck
+      const settle = 1 - Math.exp(-k * 0.55);
+      group.current.position.y = -0.5 * settle + Math.sin(k * 6) * 0.03 * Math.exp(-k);
+      group.current.rotation.x = 0.5 * settle + Math.sin(t * 0.5 + ph) * 0.01;
+      group.current.rotation.z = (lean >= 0 ? -1 : 1) * 0.16 * settle;
     } else {
-      // gentle bobbing on the swell
-      const t = performance.now() / 1000;
-      const ph = center[0] * 0.7 + center[1] * 0.5;
-      group.current.position.y = Math.sin(t * 0.9 + ph) * 0.03;
-      group.current.rotation.x = Math.sin(t * 0.7 + center[1]) * 0.018;
-      group.current.rotation.z = Math.sin(t * 0.55 + center[0]) * 0.01;
+      // gentle bobbing on the swell; damage drags the hull down and over
+      group.current.position.y = Math.sin(t * 0.9 + ph) * 0.03 - frac * 0.05;
+      group.current.rotation.x = Math.sin(t * 0.7 + center[1]) * 0.018 + frac * 0.085;
+      group.current.rotation.z = Math.sin(t * 0.55 + center[0]) * 0.01 - Math.sign(lean) * frac * 0.04;
     }
   });
 
   const mats = useMemo(() => (ghost ? ghostMats(valid) : MATS[ship.sunk ? 'sunk' : side]), [ghost, valid, ship.sunk, side]);
   const Body = CLASSES[ship.spec.id] ?? Destroyer;
   const L = len * 0.9;
+  const deckY = DECK_Y[ship.spec.id] ?? 0.24;
+  const damaged = !ghost && damage.local.length > 0;
 
   return (
-    <group position={[center[0], 0.06, center[1]]} rotation={[0, angle, 0]}>
-      <group ref={group}>
-        <Body m={mats} L={L} />
+    <group position={[center[0], 0.06, center[1]]}>
+      <group rotation={[0, angle, 0]}>
+        <group ref={group}>
+          <Body m={mats} L={L} />
+          {damaged && !ship.sunk && damage.local.map((x, i) => <Scorch key={i} x={x} y={deckY + 0.012} seed={i * 1.7 + len} />)}
+        </group>
+        {!ship.sunk && !ghost && <Wake L={L} />}
+        {!ship.sunk && !ghost && underway && <KelvinWake L={L} />}
+        {ship.sunk && !ghost && <SinkFoam L={L} />}
       </group>
-      {!ship.sunk && !ghost && <Wake L={L} />}
+      {damaged && <DamageSmoke points={damage.world} y={ship.sunk ? -0.1 : deckY} fading={ship.sunk} />}
     </group>
   );
 }
-
 const WAKE_FRAG = /* glsl */ `
   uniform float uTime;
   varying vec2 vUv;

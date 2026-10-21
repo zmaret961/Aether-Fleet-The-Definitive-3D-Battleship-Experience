@@ -11,18 +11,21 @@ import { PALETTE } from './config';
 import { isSoftwareRenderer, useQuality, useQualityProfile } from './quality';
 import { PerfProbe, ShaderWarmup } from './Warmup';
 import { SCENE_READY_EVENT } from '../pwa/splash';
-import { fitCamera } from './responsiveCamera';
+import { fitCamera, RESPONSIVE_ASPECT } from './responsiveCamera';
 
 const PostFX = lazy(() => import('./PostFX'));
 
-type Shot = { pos: THREE.Vector3; look: THREE.Vector3; fov: number };
-
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
-const SHOTS = {
-  deploy: { pos: v(0, 12.6, 10.2), look: v(0, 0, 0.6), fov: 46 },
-  battle: { pos: v(0, 19, 23.5), look: v(0, 0.9, -0.9), fov: 48 },
-} satisfies Record<string, Shot>;
+type HeroShot = { radius: number; height: number; base: number; swing: number; look: THREE.Vector3; fov: number };
+
+/** Cinematic menu shots around the hero fleet; each menu step drifts to its own angle. */
+const HERO: Record<'menu' | 'howto' | 'commander' | 'difficulty', HeroShot> = {
+  menu: { radius: 15.5, height: 3.1, base: 0.32, swing: 0.34, look: v(-0.6, 1.5, -3.5), fov: 40 },
+  howto: { radius: 17, height: 4.2, base: 0.1, swing: 0.25, look: v(0, 1.2, -4), fov: 40 },
+  commander: { radius: 11.5, height: 2.2, base: 0.72, swing: 0.22, look: v(0.6, 1.1, -2), fov: 38 },
+  difficulty: { radius: 14, height: 2.6, base: -0.18, swing: 0.16, look: v(-13.7, 3.2, -2.8), fov: 38 },
+};
 
 function CameraRig() {
   const { camera, pointer, size, scene } = useThree();
@@ -54,48 +57,44 @@ function CameraRig() {
       phaseT.current = 0;
     }
     phaseT.current += dt;
-    const menuLike = phase === 'menu' || phase === 'commander' || phase === 'difficulty' || phase === 'howto';
     const battleLike = phase === 'battle' || phase === 'over';
     const cam = camera as THREE.PerspectiveCamera;
     const motion = reducedMotion ? 0 : 1;
+    const fog = scene.fog as THREE.Fog | null;
+    if (fog) fogBase.current ??= [fog.near, fog.far];
 
     let pos: THREE.Vector3;
     let target: THREE.Vector3;
     let fov: number;
-    if (menuLike) {
-      const a = t.current * 0.06 * motion + 0.4;
-      pos = v(Math.sin(a) * 13, 6.2 + Math.sin(t.current * 0.2) * 0.4 * motion, Math.cos(a) * 13);
-      target = v(0, 0.4, 0);
-      fov = 44;
-    } else {
-      const shot = battleLike ? SHOTS.battle : SHOTS.deploy;
-      pos = shot.pos.clone();
+    let fogScale = 1;
+    if (phase === 'menu' || phase === 'commander' || phase === 'difficulty' || phase === 'howto') {
+      const shot = HERO[phase];
+      const portrait = size.width / size.height < RESPONSIVE_ASPECT;
+      const a = shot.base + Math.sin(t.current * 0.045) * shot.swing * motion;
+      const r = shot.radius * (portrait ? 1.45 : 1);
+      pos = v(Math.sin(a) * r, shot.height * (portrait ? 1.3 : 1) + Math.sin(t.current * 0.21) * 0.25 * motion, Math.cos(a) * r);
       target = shot.look.clone();
-      fov = shot.fov;
-      const fit = fitCamera(phase === 'deploy' ? 'deploy' : 'battle', pos, target, fov, size.width / size.height);
-      if (fit) {
-        pos = fit.position.clone();
-        target = fit.look.clone();
-        fov = fit.fov;
-        const fog = scene.fog as THREE.Fog | null;
-        if (fog) {
-          fogBase.current ??= [fog.near, fog.far];
-          fog.near = fogBase.current[0] * fit.scale;
-          fog.far = fogBase.current[1] * fit.scale;
-        }
-      } else {
-        const fog = scene.fog as THREE.Fog | null;
-        if (fog && fogBase.current) [fog.near, fog.far] = fogBase.current;
-      }
-      pos.x += Math.sin(t.current * 0.23) * 0.22 * motion;
-      pos.y += Math.sin(t.current * 0.31 + 1.3) * 0.12 * motion;
+      fov = shot.fov + (portrait ? 14 : 0);
+    } else {
+      const fit = fitCamera(phase === 'deploy' ? 'deploy' : 'battle', size.width, size.height);
+      pos = fit.position.clone();
+      target = fit.look.clone();
+      fov = fit.fov;
+      fogScale = fit.scale;
+      pos.x += Math.sin(t.current * 0.23) * 0.16 * motion;
+      pos.y += Math.sin(t.current * 0.31 + 1.3) * 0.1 * motion;
       if (phase === 'over') {
-        const k = Math.min(phaseT.current / 6, 1);
-        pos.lerp(v(0, 13.5, 17.5), k * 0.6);
+        // slow victory/defeat push-in toward the enemy waters and the boss
+        const k = Math.min(phaseT.current / 7, 1) * 0.35 * (motion || 0.2);
+        pos.lerp(target.clone().add(v(0, 0.6, -2)), k * 0.35);
       }
     }
-    pos.x += pointer.x * (battleLike ? 0.3 : 0.6) * motion;
-    pos.y += pointer.y * (battleLike ? 0.18 : 0.35) * motion;
+    if (fog && fogBase.current) {
+      fog.near = fogBase.current[0] * fogScale;
+      fog.far = fogBase.current[1] * fogScale;
+    }
+    pos.x += pointer.x * (battleLike ? 0.22 : 0.6) * motion;
+    pos.y += pointer.y * (battleLike ? 0.12 : 0.3) * motion;
 
     const ease = 1 - Math.exp(-dt * (phaseT.current < 2.5 ? 1.6 : 3));
     camera.position.lerp(pos, ease);
