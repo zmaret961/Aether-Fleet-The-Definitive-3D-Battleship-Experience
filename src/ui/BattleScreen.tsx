@@ -21,6 +21,7 @@ const DEEPWIKI_TIPS = [
 
 export function BattleScreen() {
   const match = useGame((s) => s.match);
+  const togglePause = useGame((s) => s.togglePause);
   const matchVersion = useGame((s) => s.matchVersion);
   const aiThinking = useGame((s) => s.aiThinking);
   const target = useGame((s) => s.target);
@@ -110,12 +111,15 @@ export function BattleScreen() {
 
       {/* bottom HUD */}
       <FadeIn delay={0.08} className="pointer-events-auto">
-        <div className="mx-auto w-full max-w-3xl flex flex-col gap-2">
+        <div className="mx-auto w-full max-w-4xl flex flex-col gap-2">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="label-caps hidden sm:block">Click a cell to set the firing solution</span>
             <div className="flex-1" />
             <GlassButton onClick={() => setTip(DEEPWIKI_TIPS[Math.floor(Math.random() * DEEPWIKI_TIPS.length)])} className="!px-3 !py-2.5">
               Ask DeepWiki
+            </GlassButton>
+            <GlassButton onClick={togglePause} className="!px-3 !py-2.5" aria-label="Pause (P)" title="Pause (P)">
+              Pause
             </GlassButton>
             <GlassButton onClick={concede} disabled={turnLock || aiThinking} className="!py-2.5">
               Concede

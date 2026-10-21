@@ -2,11 +2,14 @@ import { DIFFICULTY_INFO } from '../game/ai';
 import { useGame } from '../state/store';
 import { FadeIn, GlassButton, GlassPanel } from './Glass';
 import { COMMANDERS } from '../game/types';
+import { MatchStoryPanel } from './MatchStory';
 
 export function ResultScreen() {
   const stats = useGame((s) => s.stats);
   const playAgain = useGame((s) => s.playAgain);
   const goMenu = useGame((s) => s.goMenu);
+  const rematch = useGame((s) => s.rematch);
+  const story = useGame((s) => s.story);
   const difficulty = useGame((s) => s.difficulty);
   const commanderId = useGame((s) => s.commanderId);
 
@@ -19,22 +22,25 @@ export function ResultScreen() {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center p-4 pointer-events-none">
-      <FadeIn className="pointer-events-auto w-full max-w-2xl">
-        <GlassPanel strong className="p-6 text-center sm:p-8">
+      <FadeIn className={`pointer-events-auto w-full ${story ? 'max-w-4xl' : 'max-w-2xl'}`}>
+        <GlassPanel strong className="max-h-[calc(100vh-2rem)] overflow-y-auto p-5 text-center sm:px-7 sm:py-6">
           <div className="label-caps mb-2">Field report · vs {DIFFICULTY_INFO[difficulty].label}</div>
-          <h2 className={`title-display mb-1 text-5xl sm:text-6xl ${won ? '' : 'opacity-80'}`}>
-            {won ? 'Shipped.' : 'Rolled back.'}
+          <h2 className={`title-display mb-1 text-4xl sm:text-5xl ${won ? '' : 'opacity-80'}`}>
+            {story?.headline ?? (won ? 'Shipped.' : 'Rolled back.')}
           </h2>
-          <p className="mb-5 text-sm text-white/55">
-            {won ? 'Production is green. The backlog is closed.' : 'Rollback complete. Open a fresh branch and regroup.'}
+          <p className="mb-4 text-sm text-white/55">
+            {story?.subhead ??
+              (won ? 'Production is green. The backlog is closed.' : 'Rollback complete. Open a fresh branch and regroup.')}
           </p>
-          <div className="mb-5 flex items-center justify-center gap-2">
+          <div className="mb-4 flex items-center justify-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-accent/30 bg-accent/10 text-xs font-bold text-accent">
               {commander.initials}
             </span>
             <span className="text-sm text-white/75">Commanded by <strong className="text-white">{commander.name}</strong></span>
           </div>
-          <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          <div className={`mb-4 grid gap-4 text-left ${story ? 'md:grid-cols-2' : ''}`}>
+          <div>
+          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-2">
             {[
               { label: 'Shots', value: stats.shots },
               { label: 'ACUs spent', value: (stats.shots * 0.25).toFixed(2) },
@@ -47,24 +53,28 @@ export function ResultScreen() {
               </div>
             ))}
           </div>
-          <GlassPanel className="mb-4 p-4 text-left">
+          <GlassPanel className="p-4 text-left">
             <div className="mb-3 flex items-center justify-between">
               <span className="label-caps text-accent">DORA-style metrics</span>
               <span className="label-caps !text-[0.5rem] !tracking-[0.12em]">Not real DORA</span>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className={`grid grid-cols-1 gap-3 ${story ? '' : 'sm:grid-cols-3'}`}>
               <Metric label="Deployment frequency" value={`${(stats.hits / Math.max(stats.shots, 1)).toFixed(2)} hits / turn`} />
               <Metric label="Change failure rate" value={`${changeFailureRate}% miss rate`} />
               <Metric label="Lead time to first sink" value={stats.firstSinkTurn === null ? 'No sink' : `${stats.firstSinkTurn} turns`} />
             </div>
           </GlassPanel>
-          <div className="label-caps mb-5">
+          </div>
+          {story && <MatchStoryPanel story={story} />}
+          </div>
+          <div className="label-caps mb-4">
             Mission duration {mins}:{String(secs).padStart(2, '0')}
           </div>
-          <div className="flex gap-3 justify-center">
-            <GlassButton variant="primary" onClick={playAgain}>
-              Play Again
+          <div className="flex flex-wrap justify-center gap-3">
+            <GlassButton variant="primary" onClick={rematch} autoFocus>
+              Rematch · same fleet
             </GlassButton>
+            <GlassButton onClick={playAgain}>Change difficulty</GlassButton>
             <GlassButton onClick={goMenu}>Main Menu</GlassButton>
           </div>
         </GlassPanel>

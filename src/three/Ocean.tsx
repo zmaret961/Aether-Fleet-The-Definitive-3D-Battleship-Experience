@@ -81,8 +81,8 @@ const FRAG = /* glsl */ `
 
     // sparse glints on ripple peaks, masked into drifting patches so it
     // never reads as a regular dot field
-    float patch = 0.5 + 0.5 * sin(vWorld.x * 0.23 + uTime * 0.35) * sin(vWorld.z * 0.31 - uTime * 0.27);
-    float sp = smoothstep(0.94, 1.0, r) * smoothstep(0.55, 0.9, patch);
+    float glintMask = 0.5 + 0.5 * sin(vWorld.x * 0.23 + uTime * 0.35) * sin(vWorld.z * 0.31 - uTime * 0.27);
+    float sp = smoothstep(0.94, 1.0, r) * smoothstep(0.55, 0.9, glintMask);
     col += sp * uAccent * uCaustics;
 
     col += fres * uAccent * 0.14;
