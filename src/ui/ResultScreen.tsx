@@ -333,7 +333,7 @@ function AccuracyRing({ pct, won }: { pct: number; won: boolean }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="num text-2xl font-extrabold text-white sm:text-3xl">{Math.round(v)}%</span>
+        <span className="num text-xl font-extrabold text-white sm:text-3xl">{Math.round(v)}%</span>
         <span className="label-caps !text-[0.625rem]">Accuracy</span>
       </div>
     </div>
