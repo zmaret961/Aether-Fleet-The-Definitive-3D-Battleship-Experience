@@ -1,6 +1,8 @@
 import { GRID_SIZE, ORTHOGONAL, coordKey, inBounds, keyToCoord } from './types';
 import type { Coord, Orientation, Rng } from './types';
 import { shipCellsFor } from './board';
+import { priorFromMemory } from './prior';
+import type { PlacementMemory, PlacementPrior } from './prior';
 
 export type Difficulty = 'cadet' | 'officer' | 'commander' | 'admiral';
 
@@ -12,7 +14,11 @@ export const DIFFICULTY_INFO: Record<
     description: string;
     rank: 1 | 2 | 3 | 4;
     doctrine: string;
+    /** mean shots to sink a uniformly random fleet (opt-in AI_BENCH, 200 games) */
     avgShots: number;
+    /** mean shots vs human-like layouts on first meeting, and vs a returning player (games 4+) */
+    vsHuman: number;
+    vsReturning: number;
   }
 > = {
   cadet: {
@@ -22,6 +28,8 @@ export const DIFFICULTY_INFO: Record<
     rank: 1,
     doctrine: 'Fires at random. Chases a hit about a third of the time — when it remembers.',
     avgShots: 74,
+    vsHuman: 77,
+    vsReturning: 77,
   },
   officer: {
     label: 'Merge Conflict',
@@ -30,6 +38,8 @@ export const DIFFICULTY_INFO: Record<
     rank: 2,
     doctrine: 'Textbook hunt/target: checkerboard sweeps, then walks the line once it lands a hit.',
     avgShots: 50,
+    vsHuman: 52,
+    vsReturning: 52,
   },
   commander: {
     label: 'CVE Backlog',
@@ -38,14 +48,19 @@ export const DIFFICULTY_INFO: Record<
     rank: 3,
     doctrine: 'Builds a probability heatmap of every legal ship placement and fires at the hottest cell.',
     avgShots: 45,
+    vsHuman: 45,
+    vsReturning: 45,
   },
   admiral: {
     label: 'The Legacy Monolith',
     tagline: 'Last touched in 1987',
     description: 'Compiles at dawn. Nobody knows why it works.',
     rank: 4,
-    doctrine: 'Simulates thousands of fleets consistent with every shot so far and fires where your ships most likely are.',
+    doctrine:
+      'Solves the exact posterior over every fleet still consistent with your board, models how humans deploy, and remembers how you deployed last time.',
     avgShots: 44,
+    vsHuman: 44,
+    vsReturning: 41,
   },
 };
 
@@ -61,11 +76,16 @@ export interface AIView {
 
 export interface AIPlayer {
   next(view: AIView): Coord;
+  /** why the last shot was chosen (Admiral only) */
+  readonly lastDecision?: AIDecision | null;
 }
 
 interface Placement {
   cells: Coord[];
   keys: number[];
+  /** in-bounds orthogonal neighbours outside the ship */
+  neighbours: number[];
+  horizontal: boolean;
 }
 
 const placementCache = new Map<number, Placement[]>();
@@ -79,7 +99,15 @@ const placementsFor = (length: number): Placement[] => {
     for (let x = 0; x < GRID_SIZE; x++) {
       for (const orientation of ['h', 'v'] as Orientation[]) {
         const cells = shipCellsFor({ x, y }, orientation, length);
-        if (cells.every(inBounds)) placements.push({ cells, keys: cells.map(coordKey) });
+        if (!cells.every(inBounds)) continue;
+        const keys = cells.map(coordKey);
+        const neighbours = new Set<number>();
+        for (const cell of cells)
+          for (const delta of ORTHOGONAL) {
+            const n = { x: cell.x + delta.x, y: cell.y + delta.y };
+            if (inBounds(n) && !keys.includes(coordKey(n))) neighbours.add(coordKey(n));
+          }
+        placements.push({ cells, keys, neighbours: [...neighbours], horizontal: orientation === 'h' });
       }
     }
   }
@@ -172,31 +200,6 @@ const chooseByDensity = (map: number[][], view: AIView, rng: Rng): Coord => {
   }
   if (keys.length === 0) return keyToCoord(chooseRandom(requireUntried(view), rng));
   return keyToCoord(chooseRandom(keys, rng));
-};
-
-const preferredTargetKeys = (view: AIView): number[] => {
-  const clusters = hitClusters(view);
-  const cluster = clusters[0];
-  if (!cluster || cluster.length === 0) return [];
-  const cells = cluster.map(keyToCoord);
-  if (cluster.length >= 2) {
-    const sameX = cells.every((cell) => cell.x === cells[0].x);
-    const sameY = cells.every((cell) => cell.y === cells[0].y);
-    if (sameX || sameY) {
-      const axis = sameX ? 'y' : 'x';
-      const ordered = [...cells].sort((a, b) => (axis === 'y' ? a.y - b.y : a.x - b.x));
-      const lo = ordered[0];
-      const hi = ordered[ordered.length - 1];
-      const ends =
-        axis === 'y'
-          ? [{ x: lo.x, y: lo.y - 1 }, { x: hi.x, y: hi.y + 1 }]
-          : [{ x: lo.x - 1, y: lo.y }, { x: hi.x + 1, y: hi.y }];
-      return ends
-        .filter((cell) => inBounds(cell) && view.marks[cell.y][cell.x] === 'unknown')
-        .map(coordKey);
-    }
-  }
-  return unknownNeighbours(cluster, view).map(coordKey);
 };
 
 interface FleetSample {
@@ -510,54 +513,398 @@ class CommanderAI implements AIPlayer {
 }
 
 export interface AdmiralOptions {
+  /** Monte Carlo samples for the rare target positions too tangled to enumerate */
   samples?: number;
-  huntSamples?: number;
-  importanceWeighting?: boolean;
-  huntMode?: 'analytic' | 'monte-carlo';
+  /** placement prior; defaults to the generic human prior (or one learned from `memory`) */
+  prior?: PlacementPrior;
+  /** this player's deployment history (see prior.ts); sharpens the prior */
+  memory?: PlacementMemory | null;
+  /** search-node budget for exact posterior enumeration */
+  exactBudget?: number;
+  /** hunt-mode marginals: per-ship normalised probabilities or raw placement counts */
+  huntMarginals?: 'normalized' | 'counts';
 }
 
 export const DEFAULT_ADMIRAL_SAMPLES = 3000;
+export const DEFAULT_EXACT_BUDGET = 150_000;
+
+/** What an AI was thinking when it chose its last shot (UI / boss hooks). */
+export interface AIDecision {
+  coord: Coord;
+  /** hunt = searching, target = finishing a wounded ship, endgame = exact solve */
+  mode: 'hunt' | 'target' | 'endgame' | 'instinct';
+  /** the AI's own estimate that this shot hits, 0..1 */
+  confidence: number;
+}
+
+interface WeightedPlacement {
+  placement: Placement;
+  weight: number;
+  index: number;
+}
+
+interface ShipSlot {
+  length: number;
+  legal: WeightedPlacement[];
+  /** legal placements sorted by key, for fast "placements covering cell" lookup */
+  byCell: WeightedPlacement[][];
+}
+
+interface Posterior {
+  /** unnormalised occupancy mass per cell */
+  mass: Float64Array;
+  total: number;
+  mode: AIDecision['mode'];
+}
+
+const CELL_COUNT = GRID_SIZE * GRID_SIZE;
+
+const onBorder = (c: Coord) => c.x === 0 || c.y === 0 || c.x === GRID_SIZE - 1 || c.y === GRID_SIZE - 1;
+
+const buildSlots = (view: AIView, prior: PlacementPrior): { slots: ShipSlot[]; blocked: Uint8Array; hit: Uint8Array; hitKeys: number[] } => {
+  const blocked = new Uint8Array(CELL_COUNT);
+  const hit = new Uint8Array(CELL_COUNT);
+  const sunkAdjacent = new Uint8Array(CELL_COUNT);
+  const hitKeys: number[] = [];
+  for (let y = 0; y < GRID_SIZE; y++)
+    for (let x = 0; x < GRID_SIZE; x++) {
+      const key = y * GRID_SIZE + x;
+      if (view.sunkCells[y][x]) {
+        blocked[key] = 1;
+        for (const d of ORTHOGONAL) {
+          const n = { x: x + d.x, y: y + d.y };
+          if (inBounds(n) && !view.sunkCells[n.y][n.x]) sunkAdjacent[coordKey(n)] = 1;
+        }
+      } else if (view.marks[y][x] === 'miss') blocked[key] = 1;
+      else if (view.marks[y][x] === 'hit') {
+        hit[key] = 1;
+        hitKeys.push(key);
+      }
+    }
+  const byLength = new Map<number, ShipSlot>();
+  const slots = view.remainingLengths.map((length) => {
+    const cached = byLength.get(length);
+    if (cached) return cached;
+    const legal: WeightedPlacement[] = [];
+    const byCell = Array.from({ length: CELL_COUNT }, () => [] as WeightedPlacement[]);
+    placementsFor(length).forEach((placement, index) => {
+      let hits = 0;
+      let heat = 1;
+      for (const key of placement.keys) {
+        if (blocked[key]) return;
+        hits += hit[key];
+        heat *= prior.cell[key];
+      }
+      let weight = (placement.horizontal ? prior.horizontal : prior.vertical) * Math.pow(heat, 1 / length);
+      weight *= placement.cells.some(onBorder) ? prior.edge : prior.interior;
+      // Sink-aware: a ship whose every cell is already hit would have been announced sunk.
+      if (hits === length) return;
+      if (prior.touch !== 1 && placement.keys.some((key) => sunkAdjacent[key])) weight *= prior.touch;
+      const entry = { placement, weight, index };
+      legal.push(entry);
+      for (const key of placement.keys) byCell[key].push(entry);
+    });
+    const slot = { length, legal, byCell };
+    byLength.set(length, slot);
+    return slot;
+  });
+  return { slots, blocked, hit, hitKeys };
+};
+
+/** Distinct already-placed ships (by owner id) a placement would touch. */
+const touchedOwners = (placement: Placement, owner: Int8Array): number => {
+  let mask = 0;
+  for (const key of placement.neighbours) if (owner[key] >= 0) mask |= 1 << owner[key];
+  let count = 0;
+  while (mask) {
+    mask &= mask - 1;
+    count++;
+  }
+  return count;
+};
+
+/**
+ * Exact posterior over every complete arrangement of the remaining ships that
+ * is consistent with all shots so far. Returns null if the search would
+ * exceed the node budget (early game) so callers can fall back.
+ */
+const exactPosterior = (
+  slots: ShipSlot[],
+  hitKeys: number[],
+  prior: PlacementPrior,
+  budget: number,
+): Posterior | null => {
+  let estimate = 1;
+  for (const slot of slots) {
+    estimate *= Math.max(1, slot.legal.length);
+    if (estimate > budget * 40) return null;
+  }
+  // Most constrained ships first; identical lengths stay adjacent for symmetry breaking.
+  const order = slots
+    .map((slot, id) => ({ slot, id }))
+    .sort((a, b) => a.slot.legal.length - b.slot.legal.length || a.slot.length - b.slot.length);
+  const owner = new Int8Array(CELL_COUNT).fill(-1);
+  const isHit = new Uint8Array(CELL_COUNT);
+  for (const key of hitKeys) isHit[key] = 1;
+  const suffixLength = Array<number>(order.length + 1).fill(0);
+  for (let i = order.length - 1; i >= 0; i--) suffixLength[i] = suffixLength[i + 1] + order[i].slot.length;
+  const mass = new Float64Array(CELL_COUNT);
+  const stack: Placement[] = [];
+  const minIndex: number[] = [];
+  let total = 0;
+  let nodes = 0;
+  let aborted = false;
+
+  const visit = (depth: number, weight: number, covered: number) => {
+    if (aborted) return;
+    if (++nodes > budget) {
+      aborted = true;
+      return;
+    }
+    if (hitKeys.length - covered > suffixLength[depth]) return;
+    if (depth === order.length) {
+      if (covered !== hitKeys.length) return;
+      total += weight;
+      for (const placement of stack) for (const key of placement.keys) mass[key] += weight;
+      return;
+    }
+    const { slot } = order[depth];
+    const sameAsPrevious = depth > 0 && order[depth - 1].slot === slot;
+    const from = sameAsPrevious ? minIndex[depth - 1] + 1 : 0;
+    for (let i = from; i < slot.legal.length; i++) {
+      const entry = slot.legal[i];
+      const keys = entry.placement.keys;
+      let free = true;
+      let newlyCovered = 0;
+      for (const key of keys) {
+        if (owner[key] >= 0) {
+          free = false;
+          break;
+        }
+        newlyCovered += isHit[key];
+      }
+      if (!free) continue;
+      let w = weight * entry.weight;
+      if (prior.touch !== 1) {
+        const touching = touchedOwners(entry.placement, owner);
+        if (touching) w *= Math.pow(prior.touch, touching);
+      }
+      for (const key of keys) owner[key] = depth;
+      stack.push(entry.placement);
+      minIndex[depth] = i;
+      visit(depth + 1, w, covered + newlyCovered);
+      stack.pop();
+      for (const key of keys) owner[key] = -1;
+      if (aborted) return;
+    }
+  };
+  visit(0, 1, 0);
+  if (aborted || total <= 0) return null;
+  return { mass, total, mode: 'endgame' };
+};
+
+/**
+ * Posterior for finishing wounded ships: enumerate every way the remaining
+ * ships can explain the unsunk hits, weighting each by how many ways the
+ * untouched ships still fit around it.
+ */
+const targetPosterior = (
+  slots: ShipSlot[],
+  hitKeys: number[],
+  prior: PlacementPrior,
+  budget: number,
+): Posterior | null => {
+  const owner = new Int8Array(CELL_COUNT).fill(-1);
+  const isHit = new Uint8Array(CELL_COUNT);
+  for (const key of hitKeys) isHit[key] = 1;
+  const assigned = Array<boolean>(slots.length).fill(false);
+  const stack: Placement[] = [];
+  const mass = new Float64Array(CELL_COUNT);
+  let total = 0;
+  let nodes = 0;
+  let aborted = false;
+
+  const freeFactor = (): number => {
+    let factor = 1;
+    const seen = new Map<ShipSlot, number>();
+    slots.forEach((slot, id) => {
+      if (!assigned[id]) seen.set(slot, (seen.get(slot) ?? 0) + 1);
+    });
+    for (const [slot, copies] of seen) {
+      let fit = 0;
+      for (const entry of slot.legal) {
+        let ok = true;
+        for (const key of entry.placement.keys)
+          if (owner[key] >= 0 || isHit[key]) {
+            ok = false;
+            break;
+          }
+        if (ok) fit += entry.weight;
+      }
+      if (fit <= 0) return 0;
+      // Identical free ships are unordered: F^m / m!.
+      let term = Math.pow(fit, copies);
+      for (let m = 2; m <= copies; m++) term /= m;
+      factor *= term;
+    }
+    return factor;
+  };
+
+  const visit = (weight: number) => {
+    if (aborted) return;
+    if (++nodes > budget) {
+      aborted = true;
+      return;
+    }
+    const focus = hitKeys.find((key) => owner[key] < 0);
+    if (focus === undefined) {
+      const w = weight * freeFactor();
+      if (w <= 0) return;
+      total += w;
+      for (const placement of stack) for (const key of placement.keys) mass[key] += w;
+      return;
+    }
+    const tried = new Set<ShipSlot>();
+    for (let id = 0; id < slots.length; id++) {
+      if (assigned[id]) continue;
+      const slot = slots[id];
+      // Identical lengths are interchangeable: only branch on the first free copy.
+      if (tried.has(slot)) continue;
+      tried.add(slot);
+      for (const entry of slot.byCell[focus]) {
+        const keys = entry.placement.keys;
+        let free = true;
+        for (const key of keys)
+          if (owner[key] >= 0) {
+            free = false;
+            break;
+          }
+        if (!free) continue;
+        let w = weight * entry.weight;
+        if (prior.touch !== 1) {
+          const touching = touchedOwners(entry.placement, owner);
+          if (touching) w *= Math.pow(prior.touch, touching);
+        }
+        for (const key of keys) owner[key] = id;
+        assigned[id] = true;
+        stack.push(entry.placement);
+        visit(w);
+        stack.pop();
+        assigned[id] = false;
+        for (const key of keys) owner[key] = -1;
+        if (aborted) return;
+      }
+    }
+  };
+  visit(1);
+  if (aborted || total <= 0) return null;
+  return { mass, total, mode: 'target' };
+};
+
+/** Independent per-ship marginals: P(cell) ≈ Σ ships P(ship covers cell). */
+const huntPosterior = (slots: ShipSlot[], marginals: 'normalized' | 'counts'): Posterior => {
+  const mass = new Float64Array(CELL_COUNT);
+  for (const slot of slots) {
+    let sum = 0;
+    for (const entry of slot.legal) sum += entry.weight;
+    if (sum <= 0) continue;
+    const scale = marginals === 'normalized' ? 1 / sum : 1;
+    for (const entry of slot.legal) for (const key of entry.placement.keys) mass[key] += entry.weight * scale;
+  }
+  return { mass, total: marginals === 'normalized' ? 1 : 0, mode: 'hunt' };
+};
+
+const solvePosterior = (
+  slots: ShipSlot[],
+  hitKeys: number[],
+  prior: PlacementPrior,
+  budget: number,
+  huntMarginals: 'normalized' | 'counts',
+): Posterior | null =>
+  exactPosterior(slots, hitKeys, prior, budget) ??
+  (hitKeys.length > 0 ? targetPosterior(slots, hitKeys, prior, budget) : huntPosterior(slots, huntMarginals));
+
+/**
+ * The Admiral's belief: probability each untried cell holds a ship, plus which
+ * solver produced it. Pure; handy for an "Admiral's eye" heatmap.
+ */
+export const admiralBelief = (
+  view: AIView,
+  prior: PlacementPrior = priorFromMemory(null),
+  budget = DEFAULT_EXACT_BUDGET,
+): { map: number[][]; mode: AIDecision['mode'] } | null => {
+  const { slots, hitKeys } = buildSlots(view, prior);
+  const posterior = solvePosterior(slots, hitKeys, prior, budget, 'normalized');
+  if (!posterior) return null;
+  const map = Array.from({ length: GRID_SIZE }, (_, y) =>
+    Array.from({ length: GRID_SIZE }, (_, x) =>
+      view.marks[y][x] === 'unknown' && posterior.total > 0
+        ? Math.min(1, posterior.mass[y * GRID_SIZE + x] / posterior.total)
+        : 0,
+    ),
+  );
+  return { map, mode: posterior.mode };
+};
 
 // ---------------------------------------------------------------------------
-// Admiral — posterior fleet sampling for target and hunt decisions.
+// Admiral — Bayesian fleet inference with a human-placement prior.
+// Exact enumeration whenever the search fits a budget (every target phase and
+// the endgame), sink-aware elimination, and a prior that learns this player's
+// deployment habits across games.
 // ---------------------------------------------------------------------------
 export class AdmiralAI implements AIPlayer {
   private readonly samples: number;
-  private readonly huntSamples: number;
-  private readonly importanceWeighting: boolean;
-  private readonly huntMode: 'analytic' | 'monte-carlo';
+  private readonly prior: PlacementPrior;
+  private readonly exactBudget: number;
+  private readonly huntMarginals: 'normalized' | 'counts';
+  lastDecision: AIDecision | null = null;
 
   constructor(
     private rng: Rng,
     options: AdmiralOptions = {},
   ) {
     this.samples = options.samples ?? DEFAULT_ADMIRAL_SAMPLES;
-    this.huntSamples = options.huntSamples ?? this.samples;
-    this.importanceWeighting = options.importanceWeighting ?? false;
-    this.huntMode = options.huntMode ?? 'analytic';
+    this.prior = options.prior ?? priorFromMemory(options.memory);
+    this.exactBudget = options.exactBudget ?? DEFAULT_EXACT_BUDGET;
+    this.huntMarginals = options.huntMarginals ?? 'normalized';
   }
 
   next(view: AIView): Coord {
     requireUntried(view);
-    if (unsunkHitKeys(view).length > 0) {
-      const posterior = monteCarloMap(view, this.rng, this.samples, this.importanceWeighting);
-      if (posterior.some((row) => row.some((score) => score > 0))) {
-        const preferred = preferredTargetKeys(view);
-        if (preferred.some((key) => posterior[keyToCoord(key).y][keyToCoord(key).x] > 0)) {
-          for (let y = 0; y < GRID_SIZE; y++)
-            for (let x = 0; x < GRID_SIZE; x++)
-              if (!preferred.includes(coordKey({ x, y }))) posterior[y][x] = 0;
-        }
-        return chooseByDensity(posterior, view, this.rng);
-      }
-      return chooseByDensity(densityMap(view, 2), view, this.rng);
+    const { slots, hitKeys } = buildSlots(view, this.prior);
+    const posterior = solvePosterior(slots, hitKeys, this.prior, this.exactBudget, this.huntMarginals);
+
+    if (!posterior) {
+      const map = monteCarloMap(view, this.rng, this.samples, false);
+      const coord = chooseByDensity(map, view, this.rng);
+      this.lastDecision = { coord, mode: 'target', confidence: 0.5 };
+      return coord;
     }
 
-    const map =
-      this.huntMode === 'monte-carlo'
-        ? monteCarloMap(view, this.rng, this.huntSamples, this.importanceWeighting)
-        : densityMap(view, 1);
-    return chooseByDensity(map, view, this.rng);
+    const tiebreak = posterior.mode === 'hunt' ? null : huntPosterior(slots, 'normalized').mass;
+    let best = -1;
+    const keys: number[] = [];
+    for (let key = 0; key < CELL_COUNT; key++) {
+      const { x, y } = keyToCoord(key);
+      if (view.marks[y][x] !== 'unknown') continue;
+      const score = posterior.mass[key] + (tiebreak ? tiebreak[key] * posterior.total * 1e-6 : 0);
+      if (score > best + 1e-12 * Math.max(1, best)) {
+        best = score;
+        keys.length = 0;
+        keys.push(key);
+      } else if (Math.abs(score - best) <= 1e-12 * Math.max(1, best)) keys.push(key);
+    }
+    if (keys.length === 0 || best <= 0) {
+      const coord = keyToCoord(chooseRandom(requireUntried(view), this.rng));
+      this.lastDecision = { coord, mode: 'instinct', confidence: 0 };
+      return coord;
+    }
+    const pick = chooseRandom(keys, this.rng);
+    const coord = keyToCoord(pick);
+    const confidence =
+      posterior.total > 0 ? Math.min(1, posterior.mass[pick] / posterior.total) : 0;
+    this.lastDecision = { coord, mode: posterior.mode, confidence };
+    return coord;
   }
 }
 
@@ -577,7 +924,16 @@ export const probabilityHeatmap = (view: AIView): number[][] => {
   return map;
 };
 
-export const makeAI = (difficulty: Difficulty, rng: Rng = Math.random): AIPlayer => {
+export interface MakeAIOptions {
+  /** the player's deployment history; only the Admiral reads it */
+  memory?: PlacementMemory | null;
+}
+
+export const makeAI = (
+  difficulty: Difficulty,
+  rng: Rng = Math.random,
+  options: MakeAIOptions = {},
+): AIPlayer => {
   switch (difficulty) {
     case 'cadet':
       return new CadetAI(rng);
@@ -586,6 +942,101 @@ export const makeAI = (difficulty: Difficulty, rng: Rng = Math.random): AIPlayer
     case 'commander':
       return new CommanderAI(rng);
     case 'admiral':
-      return new AdmiralAI(rng);
+      return new AdmiralAI(rng, { memory: options.memory });
   }
+};
+
+// ---------------------------------------------------------------------------
+// Tier personalities: pacing and voice for the UI / boss layer.
+// ---------------------------------------------------------------------------
+export type TauntKind = 'open' | 'hit' | 'miss' | 'sink' | 'hurt' | 'win' | 'lose' | 'read';
+
+export interface TierPersonality {
+  /** min / max "thinking" pause before the AI fires, in ms */
+  thinkMs: readonly [number, number];
+  /** how the tier thinks out loud (status line while it deliberates) */
+  thinking: string;
+  taunts: Record<TauntKind, readonly string[]>;
+}
+
+export const TIER_PERSONALITY: Record<Difficulty, TierPersonality> = {
+  cadet: {
+    thinkMs: [380, 1500],
+    thinking: 'Re-running the suite until it passes…',
+    taunts: {
+      open: ['Works on my machine!', 'Tests are green. Mostly.'],
+      hit: ['Wait, that passed?', 'Lucky retry!'],
+      miss: ['Flaked. Retrying…', 'Probably a timing issue.'],
+      sink: ['Green build! Screenshot it!', 'Shipping before it flakes again!'],
+      hurt: ['That one was always flaky.', 'Marking it @skip.'],
+      win: ['Merged on the fourth retry!'],
+      lose: ['Quarantined. Again.'],
+      read: ['I forgot your last layout. I forget everything.'],
+    },
+  },
+  officer: {
+    thinkMs: [600, 1150],
+    thinking: 'Resolving conflicts line by line…',
+    taunts: {
+      open: ['Checkerboard sweep, by the book.', 'Rebasing onto your fleet.'],
+      hit: ['Conflict found. Resolving.', 'Walking the line now.'],
+      miss: ['Clean merge. Nothing here.', 'Skipping that hunk.'],
+      sink: ['Conflict resolved: theirs.', 'Force-pushed over your hull.'],
+      hurt: ['Who touched my branch?', 'That was a bad rebase.'],
+      win: ['Fast-forward merge complete.'],
+      lose: ['Rebase aborted.'],
+      read: ['I diffed your last deployment. Familiar.'],
+    },
+  },
+  commander: {
+    thinkMs: [750, 1250],
+    thinking: 'Triaging the probability backlog…',
+    taunts: {
+      open: ['Every cell has a CVSS score.', 'Heatmap compiled. You glow.'],
+      hit: ['Exploit confirmed.', 'Severity: critical.'],
+      miss: ['False positive. Logged.', 'Risk accepted.'],
+      sink: ['Vulnerability closed — yours.', 'Patched you out of existence.'],
+      hurt: ['That was a zero-day!', 'Escalating to SEV-1.'],
+      win: ['Audit complete. You failed it.'],
+      lose: ['Backlog… overflowing…'],
+      read: ['Your layout is in my threat model now.'],
+    },
+  },
+  admiral: {
+    thinkMs: [900, 1600],
+    thinking: 'Enumerating every fleet you could have built…',
+    taunts: {
+      open: [
+        'I have simulated this battle since 1987.',
+        'Your fleet is a posterior distribution. I sample it.',
+      ],
+      hit: ['As computed.', 'The batch job predicted that.', 'Posterior confirmed.'],
+      miss: ['A rounding error. In COBOL, those are features.', 'Pruned. One less branch.'],
+      sink: ['Deprecated.', 'Sunset with no migration path.', 'Your ship was in my cache.'],
+      hurt: ['Impossible. I compiled for this.', 'A segfault in my mainframe?!'],
+      win: ['Batch complete. Every fleet. Every outcome.'],
+      lose: ['Migrating… to… Devin…'],
+      read: ['I remember how you deploy.', 'Same habits as last time. I logged them.'],
+    },
+  },
+};
+
+/** Pause before the AI fires. Decisive Admirals fire faster; hunting ones brood. */
+export const thinkDelayMs = (
+  difficulty: Difficulty,
+  rng: Rng = Math.random,
+  decision?: AIDecision | null,
+): number => {
+  const [lo, hi] = TIER_PERSONALITY[difficulty].thinkMs;
+  const base = lo + rng() * (hi - lo);
+  if (!decision) return Math.round(base);
+  if (decision.mode === 'endgame' && decision.confidence >= 0.99) return Math.round(lo * 0.6);
+  if (decision.confidence >= 0.6) return Math.round(lo + (base - lo) * 0.35);
+  return Math.round(base);
+};
+
+/** Pick a line from the tier's pool; `read` falls back to the generic pool when no tell is known. */
+export const pickTaunt = (difficulty: Difficulty, kind: TauntKind, rng: Rng = Math.random): string => {
+  const pool = TIER_PERSONALITY[difficulty].taunts[kind];
+  return pool[Math.floor(rng() * pool.length)];
 };

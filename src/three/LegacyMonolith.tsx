@@ -572,6 +572,7 @@ export function LegacyMonolith({
       setBursts((cur) => [...cur.filter((b) => fxNow() - b.birth < 6), { id: burstId++, spec, birth, pos }]);
     };
     const onFx = (e: FxEvent) => {
+      if (e.type === 'bossMood') return;
       const now = fxNow();
       if (useGame.getState().phase !== 'battle' || s.defeatAt > 0 || s.victoryAt > 0) return;
       if (e.side === 'enemy') {
