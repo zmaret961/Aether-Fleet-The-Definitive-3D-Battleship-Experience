@@ -8,7 +8,7 @@ export function CommanderSelect() {
   const goMenu = useGame((s) => s.goMenu);
 
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center overflow-y-auto p-4 sm:p-6 pointer-events-none">
+    <div className="fixed inset-0 flex flex-col items-center justify-center-safe overflow-y-auto p-4 sm:p-6 pointer-events-none">
       <FadeIn className="mb-7 text-center">
         <div className="label-caps mb-2 text-accent">Choose your commander</div>
         <h2 className="title-display text-4xl sm:text-6xl">Who’s on the bridge?</h2>
