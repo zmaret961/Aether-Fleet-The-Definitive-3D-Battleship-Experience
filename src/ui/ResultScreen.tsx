@@ -267,7 +267,7 @@ export function ResultScreen() {
 
             {/* compact session strip: every beat on one track */}
             {beats.length > 0 && (
-              <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+              <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 max-sm:hidden">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <span className="label-caps !text-[0.6rem] text-accent">Session strip</span>
                   <span className="truncate font-mono text-[0.65rem] text-emerald-300/85">

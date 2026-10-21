@@ -2,10 +2,15 @@ import { Component, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { FLEET, GRID_SIZE } from '../game/types';
+import type { CellMark, PlacedShip } from '../game/types';
 import { Burst, Ring } from './Effects';
 import { DEBRIS, FIREBALL, MIST, SMOKE, SPARKS, WATER_COLUMN, WATER_CROWN } from './fxKit';
+import { HeroFleet } from './HeroFleet';
 import { LegacyMonolith } from './LegacyMonolith';
+import { MarkerField } from './Markers';
 import { LEGACY_MONOLITH_POSITION, LEGACY_MONOLITH_SCALE } from './config';
+import { ShipMesh } from './ShipMesh';
 import { WarmupContext } from './warmupContext';
 
 /**
@@ -68,6 +73,17 @@ function keepAlive(
 }
 
 const SPECS = [FIREBALL, SPARKS, DEBRIS, SMOKE, WATER_COLUMN, WATER_CROWN, MIST];
+const WARM_SPEC = FLEET.find((spec) => spec.id === 'carrier')!;
+const WARM_SHIP: PlacedShip = {
+  spec: WARM_SPEC,
+  cells: Array.from({ length: WARM_SPEC.length }, (_, x) => ({ x, y: 0 })),
+  hits: 1,
+  sunk: false,
+};
+const WARM_WRECK: PlacedShip = { ...WARM_SHIP, hits: WARM_SPEC.length, sunk: true };
+const WARM_MARKS = Array.from({ length: GRID_SIZE }, () => Array<CellMark>(GRID_SIZE).fill('unknown'));
+WARM_MARKS[0][0] = 'miss';
+WARM_MARKS[1][1] = 'hit';
 
 export function ShaderWarmup({ onReady, postfx }: { onReady: (ms: number) => void; postfx: boolean }) {
   const gl = useThree((s) => s.gl);
@@ -138,6 +154,10 @@ export function ShaderWarmup({ onReady, postfx }: { onReady: (ms: number) => voi
       <group ref={group} visible={false}>
         <Guard>
           <LegacyMonolith position={LEGACY_MONOLITH_POSITION} scale={LEGACY_MONOLITH_SCALE} />
+          <HeroFleet />
+          <ShipMesh ship={WARM_SHIP} hitCells={[WARM_SHIP.cells[0]]} />
+          <ShipMesh ship={WARM_WRECK} hitCells={WARM_WRECK.cells} />
+          <MarkerField marks={WARM_MARKS} version={0} />
         </Guard>
         <Guard>
           {SPECS.map((spec, i) => (

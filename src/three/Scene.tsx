@@ -42,6 +42,7 @@ function CameraRig() {
   useEffect(
     () =>
       fx.subscribe((event) => {
+        if (event.type === 'bossMood') return;
         if (reducedMotion) return;
         if (event.type === 'explosion') shake.current = Math.max(shake.current, 0.22);
         else if (event.type === 'sink') shake.current = Math.max(shake.current, 0.4);

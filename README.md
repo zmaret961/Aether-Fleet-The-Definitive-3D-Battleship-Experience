@@ -133,7 +133,7 @@ software engineer, working from plain-English direction:
 
 ## Built by 7 Devins
 
-The current version was built by a team of eight Devin sessions: seven specialists and one lead.
+The current version was built by seven specialist Devins, with a lead Devin coordinating critique and integration.
 
 | Specialist | Owns |
 |---|---|
@@ -148,16 +148,16 @@ The current version was built by a team of eight Devin sessions: seven specialis
 How the work was run:
 
 1. **Round 1.** Every specialist worked at the same time on its own branch, staying in its
-   own files so that seven people's work could be combined without collisions. Each one had to
+   own area so that seven contributions could be combined with minimal collisions. Each one had to
    pass lint, tests, a strict type check and a production build, then play the game in a real
    browser and check the screenshots before pushing.
-2. **Lead integration.** A lead Devin merged all seven branches into one, resolved the overlaps,
-   played the combined game end to end, and wrote a direct critique of each area. Round 1
-   was good, and the critique said it was not good enough yet.
+2. **Lead critique and integration.** The lead merged the seven branches into one, resolved the
+   overlaps, played the combined game end to end, and wrote a direct critique of each area. Round 1
+   was a strong start, but the critique identified work still needed before the demo was ready.
 3. **Round 2.** Each specialist fixed every point in its critique and then looked for
    improvements of its own. Shared contracts, such as the `bossMood` event that the boss emits
    and the audio and FX follow, were agreed in writing so parallel branches stayed compatible.
-   The lead integrated round 2 the same way.
+   The lead integrated round 2 the same way, preserving each specialist's intent in one final branch.
 
 It works like a product team: specialists own their own areas, there is one integration owner,
 and every change gets reviewed against what a user actually sees.

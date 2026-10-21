@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import { RESULT_HOLD_MS, useGame } from '../state/store';
 
 /**
@@ -34,7 +34,7 @@ export function ResultHold() {
   return (
     <AnimatePresence>
       {pending && (
-        <motion.div
+        <m.div
           key="hold"
           className="fixed inset-0 z-30 cursor-pointer"
           initial={{ opacity: 1 }}
@@ -43,14 +43,14 @@ export function ResultHold() {
           role="button"
           aria-label="Skip to field report"
         >
-          <motion.div
+          <m.div
             className="absolute inset-x-0 top-0 h-[max(9vh,5.75rem)] bg-black/95"
             initial={{ y: '-100%' }}
             animate={{ y: 0 }}
             transition={bar}
             aria-hidden="true"
           />
-          <motion.div
+          <m.div
             className="absolute inset-x-0 bottom-0 flex h-[max(11vh,6.5rem)] flex-col items-center justify-center gap-1.5 bg-black/95"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
@@ -61,15 +61,15 @@ export function ResultHold() {
               {sub} · <span className="text-white/80">click or press Space to skip</span>
             </div>
             <div className="mt-1 h-0.5 w-48 overflow-hidden rounded-full bg-white/10">
-              <motion.div
+              <m.div
                 className={`h-full ${won ? 'bg-success' : 'bg-danger'}`}
                 initial={{ width: '0%' }}
                 animate={{ width: '100%' }}
                 transition={{ duration: RESULT_HOLD_MS / 1000, ease: 'linear' }}
               />
             </div>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

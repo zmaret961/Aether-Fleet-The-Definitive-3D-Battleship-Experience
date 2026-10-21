@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { audio } from '../audio/engine';
-import { makeAI, thinkDelayMs } from '../game/ai';
-import { parsePlacementMemory, recordPlacement } from '../game/prior';
+import { makeAI, pickTaunt, thinkDelayMs, TIER_PERSONALITY } from '../game/ai';
+import { parsePlacementMemory, placementTell, recordPlacement } from '../game/prior';
 import type { PlacementMemory } from '../game/prior';
 import type { AIPlayer, Difficulty } from '../game/ai';
 import {
@@ -165,6 +165,7 @@ interface GameStore {
   paused: boolean;
   /** match is decided; the boss finale plays before the field report appears */
   resultPending: boolean;
+  bossOpeningLine: string | null;
   conceded: boolean;
   lastLayout: SavedPlacement[] | null;
   records: Records;
@@ -436,6 +437,7 @@ export const useGame = create<GameStore>((set, get) => {
     story: null,
     paused: false,
     resultPending: false,
+    bossOpeningLine: null,
     conceded: false,
     lastLayout: null,
     records: loadRecords(),
@@ -444,6 +446,7 @@ export const useGame = create<GameStore>((set, get) => {
 
     goMenu: () => {
       cancelTimers();
+      clockStop();
       set({
         phase: 'menu',
         match: null,
@@ -454,19 +457,20 @@ export const useGame = create<GameStore>((set, get) => {
         target: null,
         paused: false,
         resultPending: false,
+        bossOpeningLine: null,
         lastOutcome: null,
       });
     },
-    goHowTo: () => set({ phase: 'howto' }),
-    goDifficulty: () => set({ phase: 'commander' }),
-    goCommander: () => set({ phase: 'commander' }),
+    goHowTo: () => set({ phase: 'howto', resultPending: false }),
+    goDifficulty: () => set({ phase: 'commander', resultPending: false }),
+    goCommander: () => set({ phase: 'commander', resultPending: false }),
     selectCommander: (id) => {
       try {
         localStorage.setItem(COMMANDER_KEY, id);
       } catch {
         /* private mode */
       }
-      set({ commanderId: id, phase: 'difficulty' });
+      set({ commanderId: id, phase: 'difficulty', resultPending: false });
     },
     concede: () => {
       const { match } = get();
@@ -480,10 +484,13 @@ export const useGame = create<GameStore>((set, get) => {
     startDeploy: (d) => {
       audio.click();
       cancelTimers();
+      clockStop();
       set({
         paused: false,
         difficulty: d,
         phase: 'deploy',
+        resultPending: false,
+        bossOpeningLine: null,
         deploy: { board: createBoard(), selected: null, orientation: 'h' },
         boardView: 'enemy',
       });
@@ -562,6 +569,9 @@ export const useGame = create<GameStore>((set, get) => {
       const ai = makeAI(difficulty, Math.random, { memory });
       persistPlacementMemory(recordPlacement(memory, deploy.board.ships.map((ship) => ship.cells)));
       clockStart();
+      const openingLine =
+        placementTell(memory) ??
+        (TIER_PERSONALITY[difficulty].taunts.read?.length ? pickTaunt(difficulty, 'read') : null);
       set({
         lastLayout,
         paused: false,
@@ -570,6 +580,7 @@ export const useGame = create<GameStore>((set, get) => {
         stats: null,
         story: null,
         target: null,
+        bossOpeningLine: openingLine,
         match,
         ai,
         phase: 'battle',
@@ -625,6 +636,7 @@ export const useGame = create<GameStore>((set, get) => {
         story: null,
         paused: false,
         resultPending: false,
+        bossOpeningLine: null,
         target: null,
         lastOutcome: null,
       });
@@ -641,6 +653,7 @@ export const useGame = create<GameStore>((set, get) => {
         story: null,
         paused: false,
         resultPending: false,
+        bossOpeningLine: null,
         target: null,
         lastOutcome: null,
         aiThinking: false,

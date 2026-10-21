@@ -131,12 +131,12 @@ export function EasterEggs() {
             initial={{ opacity: 0, y: -16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10 }}
-            className="field-toast fixed left-1/2 top-8 z-[80] w-[min(92vw,28rem)] -translate-x-1/2 rounded-2xl border border-accent/40 bg-[#071827]/90 px-6 py-3 text-center shadow-[0_0_45px_rgba(34,211,238,0.2)] backdrop-blur-xl"
+            className="field-toast fixed left-1/2 top-8 z-[80] w-[min(92vw,28rem)] -translate-x-1/2 rounded-2xl border border-accent/40 bg-[#071827]/90 px-6 py-3 text-center shadow-[0_0_45px_rgba(34,211,238,0.2)] backdrop-blur-xl max-sm:left-auto max-sm:right-1 max-sm:top-28 max-sm:w-[min(23vw,5.5rem)] max-sm:translate-x-0 max-sm:px-1 max-sm:py-1.5"
             role="status"
           >
-            <div className="text-sm font-semibold tracking-wide text-white">{egg.title}</div>
-            <div className="mt-1 text-xs text-white/60">{egg.detail}</div>
-            <div className="label-caps mt-2 !text-[0.5rem]">
+            <div className="text-sm font-semibold tracking-wide text-white max-sm:line-clamp-3 max-sm:text-[0.6rem] max-sm:leading-tight">{egg.title}</div>
+            <div className="mt-1 text-xs text-white/60 max-sm:hidden">{egg.detail}</div>
+            <div className="label-caps mt-2 !text-[0.5rem] max-sm:mt-1 max-sm:!text-[0.4rem]">
               Easter egg {egg.found}/{TOTAL_EGGS} found
             </div>
           </m.div>

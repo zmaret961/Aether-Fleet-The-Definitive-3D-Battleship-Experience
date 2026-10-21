@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { DIFFICULTY_INFO } from '../game/ai';
+import { DIFFICULTY_INFO, TIER_PERSONALITY } from '../game/ai';
 import type { ShotEvent } from '../game/engine';
 import { useGame } from '../state/store';
 import { fx } from '../state/fx';
@@ -95,6 +95,7 @@ export function BattleScreen() {
   useEffect(
     () =>
       fx.subscribe((e) => {
+        if (e.type === 'bossMood') return;
         if (e.type === 'explosion' && e.side === 'player') setFlash((n) => n + 1);
       }),
     [],
@@ -168,7 +169,7 @@ export function BattleScreen() {
     player: { label: 'Your move', sub: 'Pick a cell on the enemy grid', tone: 'text-accent' },
     aim: { label: `Solution locked · ${target ? cellName(target) : ''}`, sub: 'Fire when ready', tone: 'text-accent' },
     firing: { label: 'Missile away', sub: 'Awaiting telemetry…', tone: 'text-ember' },
-    ai: { label: 'Legacy is compiling…', sub: 'Enemy turn · brace for regressions', tone: 'text-danger' },
+    ai: { label: 'Legacy is compiling…', sub: TIER_PERSONALITY[difficulty].thinking, tone: 'text-danger' },
     over: { label: match.winner === 'player' ? 'Backlog closed' : 'Fleet lost', sub: 'Compiling field report…', tone: match.winner === 'player' ? 'text-success' : 'text-danger' },
   }[state];
 
@@ -176,7 +177,7 @@ export function BattleScreen() {
     <div className="flex h-8 justify-center" aria-live="polite">
       <AnimatePresence mode="wait">
         {lastOutcome && lastEvent && (
-          <motion.div
+          <m.div
             key={lastOutcome.seq}
             initial={{ opacity: 0, y: reducedMotion ? 0 : 6, scale: reducedMotion ? 1 : 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -187,7 +188,7 @@ export function BattleScreen() {
             <span className="label-caps !text-[0.575rem] !text-white/55">{lastOutcome.by === 'player' ? 'You' : 'Legacy'}</span>
             <span className="num font-mono text-xs text-white/70">{cellName(lastEvent.coord)}</span>
             <span className="truncate font-semibold">{lastOutcome.text}</span>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>
@@ -331,7 +332,7 @@ export function BattleScreen() {
         className="absolute inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col items-center gap-1.5 px-3 sm:bottom-5"
       >
         {outcomeChip}
-        <GlassPanel strong className="pointer-events-auto flex w-full max-w-[44rem] items-center gap-2 rounded-2xl p-2 sm:gap-2.5 sm:p-2.5 sm:pl-4">
+        <GlassPanel strong className="pointer-events-auto flex w-full max-w-[44rem] flex-wrap items-center gap-2 rounded-2xl p-2 sm:flex-nowrap sm:gap-2.5 sm:p-2.5 sm:pl-4">
           <div className="hidden shrink-0 items-center gap-3 pr-1 sm:flex">
             <div className="leading-tight">
               <div className="label-caps !text-[0.575rem]">Target</div>
@@ -373,7 +374,7 @@ export function BattleScreen() {
           </GlassButton>
           <GlassButton
             variant="primary"
-            className="min-w-0 flex-1 whitespace-nowrap !px-4 !py-3 text-base sm:min-w-[9.5rem] sm:flex-none sm:!px-6"
+            className="order-last w-full min-w-0 flex-1 whitespace-nowrap !px-4 !py-3 text-base sm:order-none sm:w-auto sm:min-w-[9.5rem] sm:flex-none sm:!px-6"
             disabled={!target || turnLock || aiThinking}
             onClick={confirmFire}
             aria-label={target ? `Fire at ${cellName(target)}` : 'Select a target first'}

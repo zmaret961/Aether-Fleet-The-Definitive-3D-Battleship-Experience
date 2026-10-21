@@ -708,6 +708,11 @@ export function LegacyMonolith({
       s.taunt = '';
       s.tauntAt = -99;
       s.nextIdle = now + 1.4;
+      if (game.phase === 'battle' && game.bossOpeningLine) {
+        s.taunt = game.bossOpeningLine;
+        s.tauntAt = now;
+        s.tauntDur = 1.6 + game.bossOpeningLine.length * 0.05;
+      }
       motion.current.droop = 0;
       group.current.position.set(0, 0, 0);
       group.current.rotation.set(0, 0, 0);
