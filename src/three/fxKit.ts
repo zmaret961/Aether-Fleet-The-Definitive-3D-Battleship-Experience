@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { useGame } from '../state/store';
 import type { BoardSide } from '../state/fx';
 import type { Coord, PlacedShip } from '../game/types';
-import { cellToWorld, ENEMY_BOARD_POS, PLAYER_BOARD_POS } from './config';
+import { boardScale, cellToWorld, ENEMY_BOARD_POS, PLAYER_BOARD_POS } from './config';
 
 /**
  * Shared FX toolkit: one GPU particle shader (motion is solved in the vertex
@@ -58,7 +58,8 @@ export const boardBase = (side: BoardSide) => (side === 'player' ? PLAYER_BOARD_
 export const cellWorld = (side: BoardSide, c: Coord): THREE.Vector3 => {
   const [x, z] = cellToWorld(c);
   const b = boardBase(side);
-  return new THREE.Vector3(x + b[0], 0, z + b[2]);
+  const k = boardScale(side);
+  return new THREE.Vector3(x * k + b[0], 0, z * k + b[2]);
 };
 
 export const shipAt = (side: BoardSide, c: Coord): PlacedShip | null => {

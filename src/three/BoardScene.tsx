@@ -14,14 +14,17 @@ import {
   LEGACY_MONOLITH_SCALE,
   PALETTE,
   PLAYER_BOARD_POS,
+  PLAYER_BOARD_SCALE,
   worldToCell,
 } from './config';
 import { GridPlane } from './GridPlane';
 import { MarkerField } from './Markers';
 import { ShipMesh } from './ShipMesh';
 import { LegacyMonolith } from './LegacyMonolith';
+import { HeroFleet } from './HeroFleet';
 
 const RIM_MAT = new THREE.MeshStandardMaterial({ color: '#1a2a3a', metalness: 0.5, roughness: 0.35 });
+const SKIRT_MAT = new THREE.MeshStandardMaterial({ color: '#0d1a27', metalness: 0.3, roughness: 0.6 });
 
 function makeLabelTexture(text: string, color: string) {
   const c = document.createElement('canvas');
@@ -33,7 +36,7 @@ function makeLabelTexture(text: string, color: string) {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.shadowColor = color;
-    g.shadowBlur = 14;
+    g.shadowBlur = 5;
     g.fillStyle = color;
     g.fillText(text, 64, 68);
   }
@@ -71,7 +74,7 @@ function Frame({ color }: { color: string }) {
   const s = BOARD_HALF + 0.16;
   const full = BOARD_HALF * 2 + 0.44;
   const glow = useMemo(
-    () => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.4, toneMapped: false }),
+    () => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.25, toneMapped: false }),
     [color],
   );
   const bracket = 1.1;
@@ -87,8 +90,12 @@ function Frame({ color }: { color: string }) {
           <mesh position={[x, 0.04, z]} material={RIM_MAT} castShadow receiveShadow>
             <boxGeometry args={[w, 0.14, d]} />
           </mesh>
+          {/* pontoon skirt: the frame floats in the swell, so the water can foam against it */}
+          <mesh position={[x, -0.36, z]} material={SKIRT_MAT}>
+            <boxGeometry args={[w * 0.995, 0.66, d * 0.995]} />
+          </mesh>
           <mesh position={[x, 0.115, z]} material={glow}>
-            <boxGeometry args={[w === 0.22 ? 0.035 : w - 0.1, 0.012, d === 0.22 ? 0.035 : d - 0.1]} />
+            <boxGeometry args={[w === 0.22 ? 0.022 : w - 0.1, 0.01, d === 0.22 ? 0.022 : d - 0.1]} />
           </mesh>
         </group>
       ))}
@@ -189,11 +196,13 @@ function GhostCells({ cells, valid }: { cells: Coord[]; valid: boolean }) {
  * optional pick plane. All contents use local cell coords inside the group. */
 function BoardGroup({
   position,
+  scale = 1,
   board,
   version,
   side,
 }: {
   position: [number, number, number];
+  scale?: number;
   board: Board;
   version: number;
   side: 'player' | 'enemy';
@@ -231,7 +240,7 @@ function BoardGroup({
       : board.ships.filter((s) => s.sunk);
 
   return (
-    <group position={position}>
+    <group position={position} scale={scale}>
       <BoardPanel />
       <GridPlane color={tint} scan={side === 'enemy' ? 1 : 0.6} />
       <Frame color={tint} />
@@ -244,7 +253,7 @@ function BoardGroup({
             <ShipMesh ship={s} side={side} />
           </group>
         ) : (
-          <ShipMesh key={s.spec.id} ship={s} side={side} />
+          <ShipMesh key={s.spec.id} ship={s} side={side} hitCells={s.cells.filter((c) => board.marks[c.y][c.x] === 'hit')} />
         ),
       )}
 
@@ -261,7 +270,7 @@ function BoardGroup({
         position={[0, 0.04, 0]}
         onPointerMove={(e) => {
           if (!interactive) return;
-          const c = worldToCell(e.point.x - position[0], e.point.z - position[2]);
+          const c = worldToCell((e.point.x - position[0]) / scale, (e.point.z - position[2]) / scale);
           if (!c) return;
           if (!hoverRef.current || hoverRef.current.x !== c.x || hoverRef.current.y !== c.y) {
             hoverRef.current = c;
@@ -274,7 +283,7 @@ function BoardGroup({
         }}
         onClick={(e) => {
           if (!interactive) return;
-          const c = worldToCell(e.point.x - position[0], e.point.z - position[2]);
+          const c = worldToCell((e.point.x - position[0]) / scale, (e.point.z - position[2]) / scale);
           if (!c) return;
           if (side === 'enemy') aimAt(c);
           else tryPlace(c);
@@ -300,12 +309,14 @@ export function BoardScene() {
       {battle ? (
         <>
           {/* Battleship "laptop": your fleet in front, enemy waters behind */}
-          <BoardGroup position={PLAYER_BOARD_POS} board={match.player} version={matchVersion} side="player" />
+          <BoardGroup position={PLAYER_BOARD_POS} scale={PLAYER_BOARD_SCALE} board={match.player} version={matchVersion} side="player" />
           <BoardGroup position={ENEMY_BOARD_POS} board={match.enemy} version={matchVersion} side="enemy" />
           <LegacyMonolith position={LEGACY_MONOLITH_POSITION} scale={LEGACY_MONOLITH_SCALE} />
         </>
-      ) : (
+      ) : phase === 'deploy' ? (
         <BoardGroup position={[0, 0, 0]} board={deploy.board} version={matchVersion} side="player" />
+      ) : (
+        <HeroFleet />
       )}
     </group>
   );
