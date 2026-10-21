@@ -12,11 +12,14 @@ import { EasterEggs } from './ui/EasterEggs';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { useGame } from './state/store';
 import { audio } from './audio/engine';
+import { initAudioDirector } from './audio/director';
 
 export default function App() {
   const phase = useGame((s) => s.phase);
   const reducedMotion = useGame((s) => s.settings.reducedMotion);
   const highContrast = useGame((s) => s.settings.highContrast);
+
+  useEffect(() => initAudioDirector(), []);
 
   // Audio requires a user gesture; warm the ambient bed on first interaction.
   useEffect(() => {
