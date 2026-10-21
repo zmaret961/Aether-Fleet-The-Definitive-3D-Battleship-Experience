@@ -97,12 +97,14 @@ export function ScreenHeader({
   eyebrow,
   title,
   subtitle,
+  subtitleClassName = '',
   className = '',
   size = 'lg',
 }: {
   eyebrow: ReactNode;
   title: ReactNode;
   subtitle?: ReactNode;
+  subtitleClassName?: string;
   className?: string;
   size?: 'md' | 'lg';
 }) {
@@ -115,7 +117,7 @@ export function ScreenHeader({
         </span>
       </div>
       <h2 className={`title-display pb-1 ${size === 'lg' ? 'text-4xl sm:text-6xl' : 'text-3xl sm:text-5xl'}`}>{title}</h2>
-      {subtitle && <p className="mx-auto mt-3 max-w-xl text-sm text-white/70 sm:text-base">{subtitle}</p>}
+      {subtitle && <p className={`mx-auto mt-3 max-w-xl text-sm text-white/70 sm:text-base ${subtitleClassName}`}>{subtitle}</p>}
     </div>
   );
 }

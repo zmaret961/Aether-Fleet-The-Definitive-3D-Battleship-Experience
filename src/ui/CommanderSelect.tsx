@@ -49,6 +49,7 @@ export function CommanderSelect() {
           eyebrow="Step 1 of 3 · Commander"
           title="Who’s on the bridge?"
           subtitle="Pick your card. Cosmetic call sign only: no executive powers in the firing solution."
+          subtitleClassName="sm:max-w-none sm:whitespace-nowrap"
         />
       </FadeIn>
 

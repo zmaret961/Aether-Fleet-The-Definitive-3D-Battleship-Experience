@@ -86,26 +86,52 @@ function faceTexture() {
  */
 /** Per-screen horizon spot (world x, z) that keeps the boss clear of the menu cards. */
 const SILHOUETTE_SPOT: Partial<Record<Phase, [number, number]>> & { menu: [number, number] } = {
-  menu: [-51.8, -61.5],
-  howto: [34.2, -72.4],
-  commander: [-7.9, -85.1],
-  difficulty: [-19.4, -79.7],
+  menu: [-38, -55],
+  howto: [43, -75],
+  commander: [-61, -83],
+  difficulty: [-44, -79],
 };
 const tmp = new THREE.Vector3();
 
 function MonolithSilhouette() {
+  const phase = useGame((s) => s.phase);
+  const scale = phase === 'commander' ? 0.68 : 0.88;
   const face = useMemo(faceTexture, []);
   useEffect(() => () => face.dispose(), [face]);
   const beacon = useRef<THREE.MeshBasicMaterial>(null);
   const screen = useRef<THREE.MeshBasicMaterial>(null);
+  const cabinet = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: '#a1a899', metalness: 0.32, roughness: 0.52, emissive: '#415443', emissiveIntensity: 0.65 }),
+    [],
+  );
+  const trim = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: '#34434a', metalness: 0.52, roughness: 0.38, emissive: '#10221c', emissiveIntensity: 0.16 }),
+    [],
+  );
+  const cable = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: '#49616a', metalness: 0.56, roughness: 0.42, emissive: '#102832', emissiveIntensity: 0.18 }),
+    [],
+  );
+  const cables = useMemo(
+    () =>
+      ([-1, 1] as const).map(
+        (side) =>
+          new THREE.CatmullRomCurve3([
+            new THREE.Vector3(side * 4.7, 5.8, 0),
+            new THREE.Vector3(side * 6.7, 6.3, 0.4),
+            new THREE.Vector3(side * 8.5, 4.8, 1.5),
+            new THREE.Vector3(side * 10, 2.3, 2.8),
+            new THREE.Vector3(side * 11.6, 0.25, 4.2),
+          ]),
+      ),
+    [],
+  );
+  useEffect(() => () => [cabinet, trim, cable].forEach((material) => material.dispose()), [cabinet, cable, trim]);
   useFrame(() => {
     const t = performance.now() / 1000;
     if (beacon.current) beacon.current.opacity = 0.25 + 0.75 * Math.max(0, Math.sin(t * 2.4)) ** 6;
     if (screen.current) screen.current.color.setScalar(0.7 + Math.sin(t * 13) * 0.03 + (Math.sin(t * 0.7) > 0.97 ? -0.4 : 0));
   });
-  // unfogged ink silhouette so it reads against the lit horizon band
-  const ink = useMemo(() => new THREE.MeshBasicMaterial({ color: '#061220', fog: false }), []);
-  const rim = useMemo(() => new THREE.MeshBasicMaterial({ color: '#1d4a66', fog: false }), []);
   const root = useRef<THREE.Group>(null);
   const camera = useThree((s) => s.camera);
   useFrame((_, dt) => {
@@ -117,37 +143,45 @@ function MonolithSilhouette() {
     g.rotation.y = Math.atan2(camera.position.x - g.position.x, camera.position.z - g.position.z);
   });
   return (
-    <group ref={root} position={[SILHOUETTE_SPOT.menu[0], -0.6, SILHOUETTE_SPOT.menu[1]]} scale={0.72}>
-      <mesh position={[0, 14.04, 0]} material={rim}>
-        <boxGeometry args={[9.9, 0.08, 6.9]} />
+    <group ref={root} position={[SILHOUETTE_SPOT.menu[0], -0.6, SILHOUETTE_SPOT.menu[1]]} scale={scale}>
+      <mesh position={[0, 7, 0]} material={cabinet}>
+        <boxGeometry args={[9.2, 14, 6.8]} />
       </mesh>
-      <mesh position={[0, 7, 0]} material={ink}>
-        <boxGeometry args={[9, 14, 6]} />
+      <mesh position={[0, 14.35, 0]} material={trim}>
+        <boxGeometry args={[10, 1.1, 7.35]} />
       </mesh>
-      <mesh position={[0, 14.5, 0]} material={ink}>
-        <boxGeometry args={[9.8, 1, 6.8]} />
+      <mesh position={[0, 9.6, 3.52]} material={trim}>
+        <boxGeometry args={[6.65, 4.45, 0.34]} />
       </mesh>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 5.4, 4.5, 0]} material={ink}>
-          <boxGeometry args={[1.8, 9, 4.5]} />
+      <mesh position={[0, 9.6, 3.72]}>
+        <planeGeometry args={[6.2, 3.95]} />
+        <meshBasicMaterial ref={screen} map={face} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, 5.5, 3.48]} material={trim}>
+        <boxGeometry args={[6.2, 2.3, 0.24]} />
+      </mesh>
+      {[-2.5, -1.9, -1.3, -0.7, -0.1, 0.5, 1.1, 1.7, 2.3].map((x) => (
+        <mesh key={x} position={[x, 5.4, 3.62]} material={cabinet}>
+          <boxGeometry args={[0.12, 1.45, 0.08]} />
         </mesh>
       ))}
-      <mesh position={[3, 17, 0]} material={ink}>
+      {cables.map((curve, i) => (
+        <mesh key={i} material={cable}>
+          <tubeGeometry args={[curve, 40, 0.32, 8, false]} />
+        </mesh>
+      ))}
+      <mesh position={[3, 17, 0]} material={trim}>
         <cylinderGeometry args={[0.08, 0.14, 4, 6]} />
       </mesh>
-      <mesh position={[0, 9.6, 3.02]}>
-        <planeGeometry args={[5.6, 3.5]} />
-        <meshBasicMaterial ref={screen} map={face} toneMapped={false} fog={false} />
-      </mesh>
       {[-2.4, -0.8, 0.8, 2.4].map((x, i) => (
-        <mesh key={x} position={[x, 4.6, 3.02]}>
+        <mesh key={x} position={[x, 4.6, 3.53]}>
           <circleGeometry args={[0.2, 12]} />
-          <meshBasicMaterial color={i % 2 ? '#ffb020' : '#ff3b30'} toneMapped={false} fog={false} />
+          <meshBasicMaterial color={i % 2 ? '#ffb020' : '#ff3b30'} toneMapped={false} />
         </mesh>
       ))}
       <mesh position={[3, 19.1, 0]}>
         <sphereGeometry args={[0.3, 12, 8]} />
-        <meshBasicMaterial ref={beacon} color="#ff2a1a" transparent toneMapped={false} fog={false} />
+        <meshBasicMaterial ref={beacon} color="#ff2a1a" transparent toneMapped={false} />
       </mesh>
     </group>
   );

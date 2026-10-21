@@ -463,10 +463,16 @@ function CableTentacle({
           ))}
         </group>
       ) : (
-        <mesh position={[kit.end.x, kit.end.y + 0.02, kit.end.z]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[radius * 1.2, radius * 2.4, 24]} />
-          <meshBasicMaterial color="#dff3ff" transparent opacity={0.32} depthWrite={false} />
-        </mesh>
+        [0, 1, 2].map((i) => (
+          <mesh
+            key={i}
+            position={[kit.end.x, kit.end.y - 0.38 + i * 0.008, kit.end.z]}
+            rotation={[-Math.PI / 2, 0, i * 1.7]}
+          >
+            <ringGeometry args={[radius * (1.25 + i * 0.28), radius * (1.48 + i * 0.28), 32, 1, i * 1.8, 2.35]} />
+            <meshBasicMaterial color="#a8d9cf" transparent opacity={0.13 - i * 0.025} depthWrite={false} />
+          </mesh>
+        ))
       )}
     </group>
   );

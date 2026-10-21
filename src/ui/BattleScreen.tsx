@@ -332,7 +332,7 @@ export function BattleScreen() {
         className="absolute inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col items-center gap-1.5 px-3 sm:bottom-5"
       >
         {outcomeChip}
-        <GlassPanel strong className="pointer-events-auto flex w-full max-w-[44rem] flex-wrap items-center gap-2 rounded-2xl p-2 sm:flex-nowrap sm:gap-2.5 sm:p-2.5 sm:pl-4">
+        <GlassPanel strong className="pointer-events-auto flex w-full max-w-[44rem] flex-wrap items-center gap-2 rounded-2xl p-2 max-sm:gap-1 max-sm:p-1.5 sm:flex-nowrap sm:gap-2.5 sm:p-2.5 sm:pl-4">
           <div className="hidden shrink-0 items-center gap-3 pr-1 sm:flex">
             <div className="leading-tight">
               <div className="label-caps !text-[0.575rem]">Target</div>
@@ -357,29 +357,30 @@ export function BattleScreen() {
             </div>
           </div>
           <div className="hidden flex-1 sm:block" />
-          <GlassButton onClick={togglePause} className="shrink-0 whitespace-nowrap !px-3 !py-2.5" aria-label="Pause (P)" title="Pause (P)">
+          <GlassButton onClick={togglePause} className="shrink-0 whitespace-nowrap !px-2.5 !py-2 sm:!px-3 sm:!py-2.5 max-sm:text-[0.7rem]" aria-label="Pause (P)" title="Pause (P)">
             Pause
           </GlassButton>
-          <GlassButton onClick={askDeepWiki} hotkey="Q" className="shrink-0 whitespace-nowrap !px-3 !py-2.5" aria-label="Ask DeepWiki (Q)">
-            <span className="sm:hidden">DeepWiki</span>
+          <GlassButton onClick={askDeepWiki} hotkey="Q" className="shrink-0 whitespace-nowrap !px-2.5 !py-2 sm:!px-3 sm:!py-2.5 max-sm:text-[0.7rem]" aria-label="Ask DeepWiki (Q)">
+            <span className="sm:hidden">Wiki</span>
             <span className="hidden sm:inline">Ask DeepWiki</span>
           </GlassButton>
           <GlassButton
             variant={confirmConcede ? 'danger' : 'ghost'}
             onClick={() => (confirmConcede ? concede() : setConfirmConcede(true))}
             disabled={turnLock || aiThinking}
-            className="shrink-0 whitespace-nowrap !px-3 !py-2.5"
+            className="shrink-0 whitespace-nowrap !px-2.5 !py-2 sm:!px-3 sm:!py-2.5 max-sm:text-[0.7rem]"
           >
             {confirmConcede ? 'Confirm?' : 'Concede'}
           </GlassButton>
           <GlassButton
             variant="primary"
-            className="order-last w-full min-w-0 flex-1 whitespace-nowrap !px-4 !py-3 text-base sm:order-none sm:w-auto sm:min-w-[9.5rem] sm:flex-none sm:!px-6"
+            className="order-last w-full min-w-0 flex-1 whitespace-nowrap !px-2 !py-2 text-xs sm:order-none sm:w-auto sm:min-w-[9.5rem] sm:flex-none sm:!px-6 sm:!py-3 sm:text-base"
             disabled={!target || turnLock || aiThinking}
             onClick={confirmFire}
             aria-label={target ? `Fire at ${cellName(target)}` : 'Select a target first'}
           >
-            {target ? `Fire ${cellName(target)}` : aiThinking ? 'Enemy turn' : firing ? 'Inbound…' : 'Pick target'}
+            <span className="sm:hidden">{target ? 'Fire' : aiThinking ? 'Enemy' : firing ? 'Away' : 'Target'}</span>
+            <span className="hidden sm:inline">{target ? `Fire ${cellName(target)}` : aiThinking ? 'Enemy turn' : firing ? 'Inbound…' : 'Pick target'}</span>
           </GlassButton>
         </GlassPanel>
       </FadeIn>

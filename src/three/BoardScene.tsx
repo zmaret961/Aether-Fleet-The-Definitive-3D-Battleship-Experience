@@ -53,7 +53,7 @@ function CoordLabels({ color }: { color: string }) {
     for (let i = 0; i < GRID_SIZE; i++) {
       const [x, z] = cellToWorld({ x: i, y: i });
       out.push({ key: `c${i}`, pos: [x, 0.08, -BOARD_HALF - 0.62], tex: makeLabelTexture(String.fromCharCode(65 + i), color) });
-      out.push({ key: `r${i}`, pos: [-BOARD_HALF - 0.62, 0.08, z], tex: makeLabelTexture(String(i + 1), color) });
+      out.push({ key: `r${i}`, pos: [-BOARD_HALF - 0.35, 0.08, z], tex: makeLabelTexture(String(i + 1), color) });
     }
     return out;
   }, [color]);
