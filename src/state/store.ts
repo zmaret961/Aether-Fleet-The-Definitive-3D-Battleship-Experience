@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { audio } from '../audio/engine';
-import { makeAI } from '../game/ai';
+import { makeAI, thinkDelayMs } from '../game/ai';
+import { parsePlacementMemory, recordPlacement } from '../game/prior';
+import type { PlacementMemory } from '../game/prior';
 import type { AIPlayer, Difficulty } from '../game/ai';
 import {
   canPlace,
@@ -46,6 +48,24 @@ type Records = Partial<Record<Difficulty, PersistedRecord>>;
 const RECORDS_KEY = 'aether-fleet:records';
 const SETTINGS_KEY = 'aether-fleet:settings';
 const COMMANDER_KEY = 'aether-fleet:commander';
+const PLACEMENT_MEMORY_KEY = 'aether-fleet:placement-memory';
+
+/** The Admiral studies how this player deploys, across sessions. */
+const loadPlacementMemory = (): PlacementMemory | null => {
+  try {
+    return parsePlacementMemory(JSON.parse(localStorage.getItem(PLACEMENT_MEMORY_KEY) ?? 'null'));
+  } catch {
+    return null;
+  }
+};
+
+const persistPlacementMemory = (memory: PlacementMemory) => {
+  try {
+    localStorage.setItem(PLACEMENT_MEMORY_KEY, JSON.stringify(memory));
+  } catch {
+    /* private mode */
+  }
+};
 
 const loadCommander = (): CommanderId => {
   try {
@@ -216,7 +236,6 @@ const cancelTimers = () => {
   pausedAt = null;
 };
 
-const AI_THINK_MS = [650, 1150] as const;
 const AI_REVIEW_MS = 1150;
 const RESULT_DELAY_MS = 1800;
 
@@ -300,11 +319,14 @@ export const useGame = create<GameStore>((set, get) => {
   };
 
   const scheduleAI = () => {
-    const delay = AI_THINK_MS[0] + Math.random() * (AI_THINK_MS[1] - AI_THINK_MS[0]);
+    const { match: current, ai: currentAI, difficulty } = get();
+    if (!current || !currentAI || current.winner) return;
+    // Decide now (the board cannot change during Legacy's turn); pace the shot by the tier's personality.
+    const c = currentAI.next(aiView(current));
+    const delay = thinkDelayMs(difficulty, Math.random, currentAI.lastDecision);
     later(() => {
       const { match, ai } = get();
-      if (!match || !ai || match.winner) return;
-      const c = ai.next(aiView(match));
+      if (!match || match !== current || ai !== currentAI || match.winner) return;
       fx.emit({ type: 'missile', coord: c, side: 'player' });
       later(() => {
         if (get().phase !== 'battle' || get().match !== match || match.winner) return;
@@ -480,6 +502,9 @@ export const useGame = create<GameStore>((set, get) => {
       cancelTimers();
       const lastLayout = layoutOf(deploy.board);
       const match = createMatch(deploy.board, randomLayout(Math.random));
+      const memory = loadPlacementMemory();
+      const ai = makeAI(difficulty, Math.random, { memory });
+      persistPlacementMemory(recordPlacement(memory, deploy.board.ships.map((ship) => ship.cells)));
       set({
         lastLayout,
         paused: false,
@@ -488,7 +513,7 @@ export const useGame = create<GameStore>((set, get) => {
         story: null,
         target: null,
         match,
-        ai: makeAI(difficulty),
+        ai,
         phase: 'battle',
         boardView: 'enemy',
         matchVersion: 0,
