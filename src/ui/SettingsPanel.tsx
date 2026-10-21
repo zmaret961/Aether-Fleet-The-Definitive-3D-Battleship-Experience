@@ -1,4 +1,4 @@
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
 import { useGame } from '../state/store';
@@ -7,6 +7,7 @@ import { GlassButton, GlassPanel, Kbd } from './Glass';
 import { isTypingTarget, keyOf } from './hotkeys';
 import { SHORTCUT_GROUPS } from './shortcuts';
 import { useUi } from './uiStore';
+import { useFocusTrap } from './focusTrap';
 
 function Row({ label, desc, children, htmlFor }: { label: string; desc?: string; children: ReactNode; htmlFor?: string }) {
   return (
@@ -65,6 +66,8 @@ function VolumeRow({ id, label, desc, value, muted, onChange }: { id: string; la
 
 function Modal({ open, onClose, labelledBy, children, width = 'max-w-md' }: { open: boolean; onClose: () => void; labelledBy: string; children: ReactNode; width?: string }) {
   const reduced = useGame((s) => s.settings.reducedMotion);
+  const dialog = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialog, open);
   return (
     <AnimatePresence>
       {open && (
@@ -81,7 +84,8 @@ function Modal({ open, onClose, labelledBy, children, width = 'max-w-md' }: { op
             exit={{ scale: reduced ? 1 : 0.96, y: reduced ? 0 : 10 }}
             transition={{ type: 'spring', stiffness: 380, damping: 30 }}
             onClick={(e) => e.stopPropagation()}
-            className={`w-full ${width}`}
+            ref={dialog}
+            className={`max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-[1.25rem] ${width}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby={labelledBy}
@@ -120,7 +124,7 @@ function SettingsDialog() {
               Settings
             </h3>
           </div>
-          <GlassButton className="!px-3 !py-1.5" hotkey="Esc" onClick={() => setOpen(false)} autoFocus>
+          <GlassButton className="!px-3 !py-1.5" hotkey="Esc" onClick={() => setOpen(false)} data-autofocus>
             Close
           </GlassButton>
         </div>
@@ -187,7 +191,7 @@ function ShortcutsDialog() {
               Keyboard shortcuts
             </h3>
           </div>
-          <GlassButton className="!px-3 !py-1.5" hotkey="Esc" onClick={() => setOpen(false)} autoFocus>
+          <GlassButton className="!px-3 !py-1.5" hotkey="Esc" onClick={() => setOpen(false)} data-autofocus>
             Close
           </GlassButton>
         </div>

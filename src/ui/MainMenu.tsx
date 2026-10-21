@@ -22,24 +22,46 @@ export function MainMenu() {
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center p-6 pointer-events-none">
       <div className="vignette absolute inset-0" aria-hidden="true" />
-      <FadeIn className="relative mb-6 w-full max-w-3xl">
-        <GlassPanel className="overflow-hidden rounded-[2rem] px-8 pb-8 pt-7 text-center sm:px-14 sm:pb-10">
+      <FadeIn className="relative mb-5 w-full max-w-3xl sm:mb-6">
+        <GlassPanel className="menu-hero hud-corners overflow-hidden rounded-[2rem] px-5 pb-7 pt-6 text-center sm:px-14 sm:pb-9 sm:pt-7">
           <div
-            className="pointer-events-none absolute -top-24 left-1/2 h-48 w-[36rem] -translate-x-1/2 rounded-full bg-accent-2/25 blur-3xl"
+            className="pointer-events-none absolute -top-24 left-1/2 h-48 w-[36rem] max-w-[120%] -translate-x-1/2 rounded-full bg-accent-2/25 blur-3xl"
             aria-hidden="true"
           />
-          <div className="mb-5 flex justify-center">
-            <span className="chip border-accent/30 bg-accent/10 text-accent">
-              <span className="live-dot h-1.5 w-1.5" />
-              <span className="uppercase tracking-[0.2em]">Cognition · Field exercise 01</span>
+          <div className="hero-sweep" aria-hidden="true" />
+          <div className="mb-4 flex items-center justify-between gap-3 font-mono text-[0.6rem] uppercase tracking-[0.22em] text-white/40 max-sm:hidden" aria-hidden="true">
+            <span>AF-01 // Sortie briefing</span>
+            <span className="text-success/80">● Prod green</span>
+          </div>
+          <div className="mb-4 flex justify-center sm:mb-5">
+            <span className="chip max-w-full border-accent/30 bg-accent/10 text-accent">
+              <span className="live-dot h-1.5 w-1.5 shrink-0" />
+              <span className="whitespace-nowrap uppercase tracking-[0.12em] sm:tracking-[0.2em]">
+                Cognition · <span className="sm:hidden">Exercise 01</span>
+                <span className="max-sm:hidden">Field exercise 01</span>
+              </span>
             </span>
           </div>
-          <h1 className="title-display text-6xl sm:text-[6.5rem]">Aether Fleet</h1>
-          <p className="mt-4 text-base text-white/75 sm:text-lg">
-            A Cognition field exercise — <span className="font-semibold text-white">powered by Devin</span>
+          <h1 className="title-display hero-title text-[3.4rem] sm:text-[6.5rem]">Aether Fleet</h1>
+          <p className="mt-3 text-[0.95rem] text-white/75 sm:mt-4 sm:text-lg">
+            A Cognition field exercise, <span className="font-semibold text-white">powered by Devin</span>
           </p>
-          <div className="divider mx-auto my-5 w-64" />
+          <div className="divider mx-auto my-4 w-48 sm:my-5 sm:w-64" />
           <p className="label-caps">Autonomous engineering, at sea</p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/50 sm:mt-5" aria-label="Your fleet versus the Legacy Monolith">
+            {['Devin', 'Windsurf', 'DeepWiki', 'Devin Review', 'Devin Oncall'].map((n) => (
+              <span key={n} className="inline-flex items-center gap-1.5">
+                <span className="h-1 w-1 rounded-full bg-accent shadow-[0_0_6px_var(--color-accent)]" aria-hidden="true" />
+                {n}
+              </span>
+            ))}
+            <span className="basis-full text-white/30 sm:hidden" aria-hidden="true" />
+            <span className="inline-flex items-center gap-1.5 text-danger/90">
+              <span className="text-white/35">vs</span>
+              <span className="h-1 w-1 rounded-full bg-danger shadow-[0_0_6px_var(--color-danger)]" aria-hidden="true" />
+              The Legacy Monolith
+            </span>
+          </div>
         </GlassPanel>
       </FadeIn>
 
