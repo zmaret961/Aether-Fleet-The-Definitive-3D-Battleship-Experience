@@ -11,7 +11,7 @@ export function DifficultySelect() {
   const records = useGame((s) => s.records);
 
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center p-4 sm:p-6 pointer-events-none overflow-y-auto">
+    <div className="fixed inset-0 flex flex-col items-center justify-center-safe p-4 sm:p-6 pointer-events-none overflow-y-auto">
       <FadeIn className="text-center mb-6">
         <div className="label-caps mb-2 text-accent">Mission profile</div>
         <h2 className="title-display text-3xl sm:text-5xl">Choose Your Build Failure</h2>

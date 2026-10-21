@@ -1,6 +1,5 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Scene } from './three/Scene';
 import { BattleScreen } from './ui/BattleScreen';
 import { CommanderSelect } from './ui/CommanderSelect';
 import { DeployScreen } from './ui/DeployScreen';
@@ -13,6 +12,9 @@ import { SettingsPanel } from './ui/SettingsPanel';
 import { useGame } from './state/store';
 import { audio } from './audio/engine';
 import { initAudioDirector } from './audio/director';
+
+// three.js + R3F load as a separate chunk so the UI shell paints first.
+const Scene = lazy(() => import('./three/Scene').then((m) => ({ default: m.Scene })));
 
 export default function App() {
   const phase = useGame((s) => s.phase);
@@ -56,7 +58,9 @@ export default function App() {
 
   return (
     <div className="h-full w-full overflow-hidden select-none">
-      <Scene />
+      <Suspense fallback={null}>
+        <Scene />
+      </Suspense>
       <AnimatePresence mode="wait">
         {phase === 'menu' && <MainMenu key="menu" />}
         {phase === 'commander' && <CommanderSelect key="commander" />}

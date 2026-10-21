@@ -2,14 +2,87 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Aether Fleet — 3D Battleship, powered by Devin</title>
+    <meta
+      name="description"
+      content="Sink the Legacy Monolith. A cinematic 3D Battleship field exercise starring a fleet of Devin agents — playable offline, on any screen."
+    />
     <meta name="theme-color" content="#04101e" />
-    <meta name="description" content="Aether Fleet — a cinematic liquid-glass 3D Battleship experience." />
-    <title>Aether Fleet — 3D Battleship</title>
+    <meta name="color-scheme" content="dark" />
+    <link rel="canonical" href="https://zachmaret-the-battleship-experience.vercel.app/" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Aether Fleet" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Aether Fleet" />
+    <meta property="og:title" content="Aether Fleet — 3D Battleship, powered by Devin" />
+    <meta
+      property="og:description"
+      content="Pick a commander, deploy a fleet of Devin agents, and sink the Legacy Monolith. A cinematic, offline-ready 3D Battleship."
+    />
+    <meta property="og:url" content="https://zachmaret-the-battleship-experience.vercel.app/" />
+    <meta property="og:image" content="https://zachmaret-the-battleship-experience.vercel.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="A Devin fleet squares off against the Legacy Monolith across two holographic Battleship grids." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Aether Fleet — 3D Battleship, powered by Devin" />
+    <meta
+      name="twitter:description"
+      content="Pick a commander, deploy a fleet of Devin agents, and sink the Legacy Monolith."
+    />
+    <meta name="twitter:image" content="https://zachmaret-the-battleship-experience.vercel.app/og-image.png" />
+
+    <style>
+      html, body { margin: 0; height: 100%; background: #04101e; }
+      html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
+      body { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+      .pwa-corner { top: max(1rem, env(safe-area-inset-top)); right: max(1rem, env(safe-area-inset-right)); }
+      #boot {
+        position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 18px;
+        background: radial-gradient(120% 80% at 50% 35%, #11195a 0%, #07122e 45%, #04101e 100%);
+        color: #e8f3ff; font: 500 13px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+        transition: opacity 0.6s ease, visibility 0.6s ease;
+      }
+      #boot.boot-done { opacity: 0; visibility: hidden; }
+      #boot svg { width: 76px; height: 76px; filter: drop-shadow(0 0 24px rgba(81, 70, 255, 0.55)); }
+      #boot .boot-title { font-size: 22px; font-weight: 750; letter-spacing: 0.32em; text-indent: 0.32em; }
+      #boot .boot-bar { width: 168px; height: 2px; border-radius: 2px; background: rgba(154, 167, 255, 0.16); overflow: hidden; }
+      #boot .boot-bar i { display: block; width: 40%; height: 100%; border-radius: 2px;
+        background: linear-gradient(90deg, transparent, #9aa7ff, #67e8f9);
+        animation: boot-sweep 1.15s cubic-bezier(0.6, 0, 0.4, 1) infinite; }
+      #boot .boot-line { font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(232, 243, 255, 0.5); }
+      @keyframes boot-sweep { from { transform: translateX(-110%); } to { transform: translateX(260%); } }
+      @media (prefers-reduced-motion: reduce) { #boot .boot-bar i { animation-duration: 3s; } }
+    </style>
   </head>
   <body>
+    <div id="boot" role="status" aria-label="Loading Aether Fleet">
+      <svg viewBox="0 0 512 512" aria-hidden="true">
+        <circle cx="256" cy="232" r="120" fill="none" stroke="#5146ff" stroke-width="12" />
+        <path d="M110 276h292l-36 52H146z" fill="#c7ceff" />
+        <rect x="196" y="232" width="120" height="44" rx="8" fill="#c7ceff" />
+        <rect x="234" y="194" width="44" height="38" rx="6" fill="#9aa7ff" />
+        <rect x="251" y="150" width="10" height="44" rx="5" fill="#9aa7ff" />
+        <circle cx="256" cy="146" r="11" fill="#67e8f9" />
+        <path d="M100 360q39-16 78 0t78 0 78 0 78 0" fill="none" stroke="#67e8f9" stroke-width="12" stroke-linecap="round" />
+      </svg>
+      <div class="boot-title">AETHER FLEET</div>
+      <div class="boot-bar"><i></i></div>
+      <div class="boot-line">Provisioning the fleet's sandbox</div>
+    </div>
     <div id="root"></div>
+    <noscript>Aether Fleet needs JavaScript and WebGL to launch the fleet.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
