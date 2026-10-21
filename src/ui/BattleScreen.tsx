@@ -61,6 +61,7 @@ const logLine = (ev: ShotEvent) => {
 
 export function BattleScreen() {
   const match = useGame((s) => s.match);
+  const togglePause = useGame((s) => s.togglePause);
   const matchVersion = useGame((s) => s.matchVersion);
   const aiThinking = useGame((s) => s.aiThinking);
   const target = useGame((s) => s.target);
@@ -336,6 +337,9 @@ export function BattleScreen() {
               </span>
             </div>
           </div>
+          <GlassButton onClick={togglePause} className="!px-3.5 !py-2.5" aria-label="Pause (P)" title="Pause (P)">
+            Pause
+          </GlassButton>
           <GlassButton onClick={askDeepWiki} hotkey="Q" className="!px-3.5 !py-2.5">
             Ask DeepWiki
           </GlassButton>

@@ -70,12 +70,6 @@ function CameraRig() {
       pos = shot.pos.clone();
       target = shot.look.clone();
       fov = shot.fov;
-      pos.x += Math.sin(t.current * 0.23) * 0.22 * motion;
-      pos.y += Math.sin(t.current * 0.31 + 1.3) * 0.12 * motion;
-      if (phase === 'over') {
-        const k = Math.min(phaseT.current / 6, 1);
-        pos.lerp(v(0, 13.5, 17.5), k * 0.6);
-      }
       const fit = fitCamera(phase === 'deploy' ? 'deploy' : 'battle', pos, target, fov, size.width / size.height);
       if (fit) {
         pos = fit.position.clone();
@@ -90,6 +84,12 @@ function CameraRig() {
       } else {
         const fog = scene.fog as THREE.Fog | null;
         if (fog && fogBase.current) [fog.near, fog.far] = fogBase.current;
+      }
+      pos.x += Math.sin(t.current * 0.23) * 0.22 * motion;
+      pos.y += Math.sin(t.current * 0.31 + 1.3) * 0.12 * motion;
+      if (phase === 'over') {
+        const k = Math.min(phaseT.current / 6, 1);
+        pos.lerp(v(0, 13.5, 17.5), k * 0.6);
       }
     }
     pos.x += pointer.x * (battleLike ? 0.3 : 0.6) * motion;

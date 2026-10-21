@@ -4,6 +4,7 @@ import { FadeIn, GlassButton, GlassPanel } from './Glass';
 import { CommanderAvatar } from './CommanderAvatar';
 import { COMMANDERS, ENEMY_FLEET_NAMES, FLEET } from '../game/types';
 import { useCountUp, useHotkeys } from './hotkeys';
+import { MatchStoryPanel } from './MatchStory';
 
 export function ResultScreen() {
   const stats = useGame((s) => s.stats);
@@ -11,10 +12,12 @@ export function ResultScreen() {
   const records = useGame((s) => s.records);
   const playAgain = useGame((s) => s.playAgain);
   const goMenu = useGame((s) => s.goMenu);
+  const rematch = useGame((s) => s.rematch);
+  const story = useGame((s) => s.story);
   const difficulty = useGame((s) => s.difficulty);
   const commanderId = useGame((s) => s.commanderId);
 
-  useHotkeys({ Enter: playAgain, Escape: goMenu });
+  useHotkeys({ Enter: rematch, Escape: goMenu });
 
   if (!stats) return null;
   const won = stats.winner === 'player';
@@ -40,8 +43,8 @@ export function ResultScreen() {
   return (
     <div className="fixed inset-0 flex items-center justify-center overflow-y-auto p-4 pointer-events-none">
       <div className="vignette absolute inset-0" aria-hidden="true" />
-      <FadeIn className="relative pointer-events-auto w-full max-w-3xl">
-        <GlassPanel strong className="overflow-hidden p-6 sm:p-8">
+      <FadeIn className={`relative pointer-events-auto w-full ${story ? 'max-w-4xl' : 'max-w-3xl'}`}>
+        <GlassPanel strong className="max-h-[calc(100vh-2rem)] overflow-y-auto p-6 sm:p-8">
           <div
             className={`pointer-events-none absolute -top-32 left-1/2 h-64 w-[40rem] -translate-x-1/2 rounded-full blur-3xl ${
               won ? 'bg-accent-2/30' : 'bg-danger/20'
@@ -52,9 +55,11 @@ export function ResultScreen() {
             <div className="label-caps mb-3">
               Field report · vs <span className={won ? 'text-accent' : 'text-danger'}>{DIFFICULTY_INFO[difficulty].label}</span>
             </div>
-            <h2 className={`title-display text-6xl sm:text-7xl ${won ? '' : 'title-danger'}`}>{won ? 'Shipped.' : 'Rolled back.'}</h2>
+            <h2 className={`title-display text-6xl sm:text-7xl ${won ? '' : 'title-danger'}`}>
+              {story?.headline ?? (won ? 'Shipped.' : 'Rolled back.')}
+            </h2>
             <p className="mt-3 text-sm text-white/70 sm:text-base">
-              {won ? 'Production is green. The backlog is closed.' : 'Rollback complete. Open a fresh branch and regroup.'}
+              {story?.subhead ?? (won ? 'Production is green. The backlog is closed.' : 'Rollback complete. Open a fresh branch and regroup.')}
             </p>
             <div className="mt-4 flex items-center justify-center gap-2.5 text-sm text-white/75">
               <CommanderAvatar id={commander.id} size="sm" />
@@ -112,16 +117,23 @@ export function ResultScreen() {
             </div>
           </div>
 
+          {story && (
+            <div className="relative mt-4">
+              <MatchStoryPanel story={story} />
+            </div>
+          )}
+
           <footer className="relative mt-6 flex flex-col-reverse items-center justify-between gap-3 sm:flex-row">
             <span className="num text-xs text-white/60">
               Record vs {DIFFICULTY_INFO[difficulty].label}: <strong className="text-white">{rec ? `${rec.wins}W – ${rec.losses}L` : '—'}</strong>
             </span>
-            <div className="flex gap-2.5">
+            <div className="flex flex-wrap justify-center gap-2.5">
+              <GlassButton variant="primary" hotkey="Enter" onClick={rematch} autoFocus>
+                Rematch · same fleet
+              </GlassButton>
+              <GlassButton onClick={playAgain}>Change difficulty</GlassButton>
               <GlassButton hotkey="Esc" onClick={goMenu}>
                 Main Menu
-              </GlassButton>
-              <GlassButton variant="primary" hotkey="Enter" onClick={playAgain} autoFocus>
-                Play Again
               </GlassButton>
             </div>
           </footer>
