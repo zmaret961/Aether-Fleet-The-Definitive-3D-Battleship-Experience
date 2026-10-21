@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { DIFFICULTY_INFO } from '../game/ai';
 import type { StoryBeat } from '../game/story';
@@ -7,6 +7,7 @@ import { FadeIn, GlassButton, GlassPanel } from './Glass';
 import { CommanderAvatar } from './CommanderAvatar';
 import { COMMANDERS, ENEMY_FLEET_NAMES, FLEET } from '../game/types';
 import { useCountUp, useHotkeys } from './hotkeys';
+import { canvasToBlob, renderShareCard } from './shareCard';
 
 type Tab = 'timeline' | 'backlog' | 'metrics';
 const TABS: { id: Tab; label: string }[] = [
@@ -35,7 +36,13 @@ export function ResultScreen() {
   const [copied, setCopied] = useState(false);
   const tabsId = useId();
 
-  useHotkeys({ Enter: rematch, Escape: goMenu, d: playAgain });
+  // brief grace so a key mashed to skip the finale doesn't also rematch / quit
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setArmed(true), 700);
+    return () => clearTimeout(t);
+  }, []);
+  useHotkeys({ Enter: rematch, Escape: goMenu, d: playAgain }, armed);
 
   if (!stats) return null;
   const won = stats.winner === 'player';
@@ -79,6 +86,33 @@ export function ResultScreen() {
       await navigator.clipboard.writeText(report);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const savePng = async () => {
+    if (!story) return;
+    try {
+      const canvas = await renderShareCard({
+        story,
+        won,
+        commander: { name: commander.name, initials: commander.initials, from: '#9aa7ff', to: '#5146ff' },
+        difficultyLabel: info.label,
+        duration: `${mins}:${String(secs).padStart(2, '0')}`,
+        shots: stats.shots,
+        accuracyPct: stats.accuracyPct,
+        shipsSunk: stats.shipsSunk,
+        marks: match?.enemy.marks ?? [],
+        sunkCells: new Set((match?.enemy.ships ?? []).filter((ship) => ship.sunk).flatMap((ship) => ship.cells.map((cell) => `${cell.x},${cell.y}`))),
+      });
+      const blob = await canvasToBlob(canvas);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `aether-fleet-field-report-${difficulty}-${won ? 'shipped' : 'rolled-back'}.png`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch {
       setCopied(false);
     }
@@ -260,7 +294,7 @@ export function ResultScreen() {
 
           {/* pinned action bar */}
           <footer className="relative flex shrink-0 flex-col-reverse items-center justify-between gap-2 border-t border-white/10 bg-black/25 px-4 py-3 sm:flex-row sm:gap-2.5 sm:px-8">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="num whitespace-nowrap text-[0.7rem] text-white/60 sm:text-xs">
                 Record vs {info.label}: <strong className="text-white">{rec ? `${rec.wins}W – ${rec.losses}L` : '—'}</strong>
               </span>
@@ -271,6 +305,13 @@ export function ResultScreen() {
                 aria-live="polite"
               >
                 {copied ? 'Copied ✓' : 'Copy report'}
+              </button>
+              <button
+                type="button"
+                onClick={savePng}
+                className="cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-semibold text-accent underline-offset-4 hover:underline"
+              >
+                Save PNG
               </button>
             </div>
             <div className="flex w-full flex-wrap justify-center gap-2 sm:w-auto">

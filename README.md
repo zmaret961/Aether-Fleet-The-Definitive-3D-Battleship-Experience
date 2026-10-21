@@ -31,11 +31,18 @@ A hit is a merged PR, a miss is a failed CI run, a sunk ship is a closed ticket.
 ends with a **field report** that retells the match as a story: first green build, every
 ticket closed, every regression, persistence streaks, and a parting shot from the Monolith.
 
+The deciding shot gets a letterboxed finale (the Monolith's `JOB TERMINATED` defeat or its
+victory gloat) before the report slides in; click, tap or press Space to skip it. The report's
+**Share field report** button copies the match as plain text (Slack/PR-ready, with an ASCII
+grid) and renders a Cognition-branded 1200×630 PNG card you can download or share.
+
 | Deploy | Field report |
 |---|---|
 | ![Fleet deployment](docs/screenshots/deploy.png) | ![Field report with session timeline](docs/screenshots/result.png) |
 | **Main menu** | **Pause** |
 | ![Main menu](docs/screenshots/menu.png) | ![Pause overlay](docs/screenshots/pause.png) |
+| **Finale** | **Share field report** |
+| ![Letterboxed finale: the Legacy Monolith's JOB TERMINATED screen](docs/screenshots/hold.png) | ![Share dialog with the canvas-rendered PNG card](docs/screenshots/share.png) |
 
 ## Play
 
@@ -105,7 +112,10 @@ npm run build      # production build + service worker
 
 `src/state/store.test.ts` plays complete matches on all four difficulties through the real
 store with fake timers, and checks pause, quit-mid-turn and rematch — so a soft-lock fails CI
-instead of a demo.
+instead of a demo. `src/state/store.flow.test.ts` goes further on every difficulty: win, finale
+hold, report, rematch, a second report, quit mid-AI-turn, a fresh game, and asserts that zero
+game timers are left scheduled after each quit or rematch, that the mission clock excludes pause
+time, and that skipping the finale is idempotent.
 
 ## How Devin built it
 
@@ -120,6 +130,37 @@ software engineer, working from plain-English direction:
 3. **Parallel specialists.** Later rounds ran several Devin sessions at once, each owning one
    area (visuals, ocean, boss, audio, UI, game flow & QA) on its own branch.
 4. **Devin Review** checked pull requests; **DeepWiki** documents the codebase.
+
+## Built by 7 Devins
+
+The current version was built by a team of eight Devin sessions: seven specialists and one lead.
+
+| Specialist | Owns |
+|---|---|
+| 3D art | Ship models, ocean and grid shaders, lighting |
+| FX & boss | Missiles, splashes, explosions, the Legacy Monolith's moods and finale |
+| AI engine | The four difficulty tiers (hunt/target, parity, probability density) |
+| Audio | The procedural Web Audio score and sound effects |
+| UI / HUD | Glass panels, HUD, menus, field report layout |
+| Perf, mobile & PWA | Frame budget, touch controls, the offline service worker |
+| Game flow, story & QA | Store and timers, match story, share card, end-to-end QA |
+
+How the work was run:
+
+1. **Round 1.** Every specialist worked at the same time on its own branch, staying in its
+   own files so that seven people's work could be combined without collisions. Each one had to
+   pass lint, tests, a strict type check and a production build, then play the game in a real
+   browser and check the screenshots before pushing.
+2. **Lead integration.** A lead Devin merged all seven branches into one, resolved the overlaps,
+   played the combined game end to end, and wrote a direct critique of each area. Round 1
+   was good, and the critique said it was not good enough yet.
+3. **Round 2.** Each specialist fixed every point in its critique and then looked for
+   improvements of its own. Shared contracts, such as the `bossMood` event that the boss emits
+   and the audio and FX follow, were agreed in writing so parallel branches stayed compatible.
+   The lead integrated round 2 the same way.
+
+It works like a product team: specialists own their own areas, there is one integration owner,
+and every change gets reviewed against what a user actually sees.
 
 ## Deploy
 

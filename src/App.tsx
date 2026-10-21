@@ -10,6 +10,7 @@ import { ResultScreen } from './ui/ResultScreen';
 import { EasterEggs } from './ui/EasterEggs';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { PauseOverlay } from './ui/PauseOverlay';
+import { ResultHold } from './ui/ResultHold';
 import { useGame } from './state/store';
 import { initAudioDirector } from './audio/director';
 import { FLEET } from './game/types';
@@ -43,6 +44,7 @@ export default function App() {
       }
       if (s.settingsOpen) return;
       const key = e.key.toLowerCase();
+      if (s.resultPending) return;
       if (s.phase === 'battle' && (key === 'p' || e.key === 'Escape')) {
         e.preventDefault();
         s.togglePause();
@@ -83,6 +85,7 @@ export default function App() {
         {phase === 'battle' && <BattleScreen key="bat" />}
         {phase === 'over' && <ResultScreen key="over" />}
       </AnimatePresence>
+      <ResultHold />
       <PauseOverlay />
       <EasterEggs />
       <SettingsPanel />

@@ -1,6 +1,6 @@
 import { AnimatePresence, m } from 'framer-motion';
 import { DIFFICULTY_INFO } from '../game/ai';
-import { useGame } from '../state/store';
+import { formatClock, missionElapsedMs, useGame } from '../state/store';
 import { GlassButton, GlassPanel } from './Glass';
 
 export function PauseOverlay() {
@@ -35,14 +35,22 @@ export function PauseOverlay() {
             exit={{ scale: 0.97, y: 8 }}
             transition={{ type: 'spring', stiffness: 380, damping: 30 }}
           >
-            <GlassPanel strong className="glass-opaque w-80 p-6 text-center">
+            <GlassPanel strong className="glass-opaque w-[22rem] max-w-[calc(100vw-2rem)] p-6 text-center">
               <div className="label-caps mb-2 text-accent">Session paused · vs {DIFFICULTY_INFO[difficulty].label}</div>
               <h3 className="title-display mb-1 text-4xl">Paused</h3>
-              <p className="mb-5 text-xs text-white/55">
-                Devin is idle. No ACUs are being consumed.
-                <br />
-                {shots} shots fired · {closed}/5 tickets closed
-              </p>
+              <p className="mb-3 text-xs text-white/55">Devin is idle. No ACUs are being consumed.</p>
+              <dl className="mb-5 grid grid-cols-3 gap-2 text-center">
+                {[
+                  ['Shots', String(shots)],
+                  ['Tickets', `${closed}/5`],
+                  ['Mission', formatClock(missionElapsedMs() / 1000)],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex flex-col-reverse rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5">
+                    <dt className="label-caps !text-[0.5rem]">{k}</dt>
+                    <dd className="num text-sm font-semibold text-white">{v}</dd>
+                  </div>
+                ))}
+              </dl>
               <div className="flex flex-col gap-2.5">
                 <GlassButton variant="primary" onClick={resume} autoFocus>
                   Resume session

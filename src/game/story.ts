@@ -214,3 +214,37 @@ export const buildStory = (m: Match, opts: { conceded?: boolean; seed?: number }
     monolithQuote: quotes[Math.abs(seed) % quotes.length],
   };
 };
+
+export interface ShareContext {
+  commanderName: string;
+  difficultyLabel: string;
+  /** m:ss mission clock */
+  duration: string;
+  shots: number;
+  accuracyPct: number;
+  shipsSunk: number;
+  /** final enemy grid (player's shots); drawn as a 10x10 text board */
+  marks?: ('unknown' | 'miss' | 'hit')[][];
+}
+
+/** Plain-text field report for pasting into Slack, email or a PR comment. */
+export const storyToText = (story: MatchStory, ctx: ShareContext): string => {
+  const lines = [
+    'AETHER FLEET · FIELD REPORT',
+    `${story.headline} ${story.subhead}`,
+    `Commander ${ctx.commanderName} vs ${ctx.difficultyLabel} · ${ctx.duration} mission`,
+    `${plural(ctx.shots, 'shot')} · ${ctx.accuracyPct}% accuracy · ${ctx.shipsSunk}/5 tickets closed · ${story.playerAfloat}/5 fleet afloat`,
+  ];
+  if (ctx.marks) {
+    lines.push('', '   A B C D E F G H I J');
+    ctx.marks.forEach((row, y) => {
+      const cells = row.map((m) => (m === 'hit' ? 'X' : m === 'miss' ? 'o' : '.')).join(' ');
+      lines.push(`${String(y + 1).padStart(2)} ${cells}`);
+    });
+    lines.push('   X merged · o CI failed');
+  }
+  lines.push('', 'Session timeline');
+  for (const beat of story.beats) lines.push(`T${beat.turn}  ${beat.title}: ${beat.detail}`);
+  lines.push('', `LEGACY-MONOLITH> ${story.monolithQuote}`, '', 'Built by Devin, the AI software engineer from Cognition.');
+  return lines.join('\n');
+};
