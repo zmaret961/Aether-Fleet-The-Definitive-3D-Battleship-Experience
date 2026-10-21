@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import { DIFFICULTY_INFO } from '../game/ai';
 import { useGame } from '../state/store';
 import { GlassButton, GlassPanel } from './Glass';
@@ -19,7 +19,7 @@ export function PauseOverlay() {
   return (
     <AnimatePresence>
       {paused && phase === 'battle' && (
-        <motion.div
+        <m.div
           key="pause"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -29,7 +29,7 @@ export function PauseOverlay() {
           aria-modal="true"
           aria-label="Paused"
         >
-          <motion.div
+          <m.div
             initial={{ scale: 0.95, y: 12 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.97, y: 8 }}
@@ -53,8 +53,8 @@ export function PauseOverlay() {
               </div>
               <div className="label-caps mt-4 !text-[0.55rem]">P or Esc to resume</div>
             </GlassPanel>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

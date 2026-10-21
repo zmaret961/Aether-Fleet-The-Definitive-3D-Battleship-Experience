@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Lightformer, PerformanceMonitor } from '@react-three/drei';
 import * as THREE from 'three';
@@ -8,7 +8,9 @@ import { BoardScene } from './BoardScene';
 import { EffectsLayer } from './Effects';
 import { Ocean, SKY_HORIZON, SkyDome } from './Ocean';
 import { PALETTE } from './config';
-import { DEVICE, isSoftwareRenderer, useQuality } from './quality';
+import { isSoftwareRenderer, useQuality, useQualityProfile } from './quality';
+import { PerfProbe, ShaderWarmup } from './Warmup';
+import { SCENE_READY_EVENT } from '../pwa/splash';
 import { fitCamera } from './responsiveCamera';
 
 const PostFX = lazy(() => import('./PostFX'));
@@ -118,15 +120,15 @@ function CameraRig() {
 function AdaptiveDpr() {
   const setDpr = useThree((s) => s.setDpr);
   const gl = useThree((s) => s.gl);
-  const setBloom = useQuality((s) => s.setBloom);
+  const { maxDpr, minDpr } = useQualityProfile();
   return (
     <PerformanceMonitor
       flipflops={4}
       onChange={({ factor }) => {
-        setDpr(Math.min(DEVICE.maxDpr, Math.max(0.7, DEVICE.maxDpr * (0.55 + factor * 0.65))));
+        setDpr(Math.min(maxDpr, Math.max(minDpr, maxDpr * (0.55 + factor * 0.65))));
       }}
       onFallback={() => {
-        if (useGame.getState().settings.perfMode === 'auto' && !isSoftwareRenderer(gl.getContext())) setBloom(false);
+        if (!isSoftwareRenderer(gl.getContext())) useQuality.getState().degrade();
       }}
     />
   );
@@ -144,8 +146,15 @@ function StudioEnvironment() {
   );
 }
 
-function KeyLight({ shadows }: { shadows: boolean }) {
+function KeyLight({ mapSize }: { mapSize: number }) {
   const ref = useRef<THREE.DirectionalLight>(null);
+  useEffect(() => {
+    const shadow = ref.current?.shadow;
+    if (!shadow || !mapSize || shadow.mapSize.x === mapSize) return;
+    shadow.mapSize.set(mapSize, mapSize);
+    shadow.map?.dispose();
+    shadow.map = null;
+  }, [mapSize]);
   useEffect(() => {
     const light = ref.current;
     if (!light) return;
@@ -166,8 +175,8 @@ function KeyLight({ shadows }: { shadows: boolean }) {
       position={[-9, 16, 8]}
       intensity={2.1}
       color="#e4f0ff"
-      castShadow={shadows}
-      shadow-mapSize={[2048, 2048]}
+      castShadow={mapSize > 0}
+      shadow-mapSize={[mapSize || 1024, mapSize || 1024]}
     />
   );
 }
@@ -183,26 +192,27 @@ function BossGlow() {
   return <pointLight ref={ref} position={[0, 5, -12]} intensity={0} color={PALETTE.enemy} distance={18} decay={1.6} />;
 }
 
-function SceneContent() {
-  const perfMode = useGame((s) => s.settings.perfMode);
+function SceneContent({ warm, onWarm }: { warm: boolean; onWarm: (ms: number) => void }) {
+  const q = useQualityProfile();
   const reducedMotion = useGame((s) => s.settings.reducedMotion);
-  const low = perfMode === 'low';
   return (
     <>
       <color attach="background" args={[PALETTE.deepSea]} />
       <fog attach="fog" args={[SKY_HORIZON, 34, 95]} />
       <SkyDome />
-      {!low && <StudioEnvironment />}
+      {q.envMap && <StudioEnvironment />}
       <ambientLight intensity={0.25} color="#9ecbff" />
       <hemisphereLight args={['#bcdcff', '#06101c', 0.85]} />
-      <KeyLight shadows={!low} />
+      <KeyLight mapSize={q.shadowMapSize} />
       <directionalLight position={[8, 6, -14]} intensity={1.1} color={PALETTE.accentSoft} />
       <BossGlow />
-      <Ocean amp={reducedMotion ? 0.08 : 0.2} caustics={low ? 0.4 : 1} segments={low ? 64 : 128} />
+      <Ocean amp={reducedMotion ? 0.08 : 0.2} caustics={q.caustics} segments={q.oceanSegments} />
       <BoardScene />
       <EffectsLayer />
       <CameraRig />
-      {!low && (
+      {!warm && <ShaderWarmup onReady={onWarm} />}
+      <PerfProbe />
+      {q.postfx && (
         <Suspense fallback={null}>
           <PostFX />
         </Suspense>
@@ -212,18 +222,27 @@ function SceneContent() {
 }
 
 export function Scene() {
-  const low = useGame((s) => s.settings.perfMode) === 'low';
+  const q = useQualityProfile();
+  // Hold the render loop while the splash is up so shaders compile in parallel
+  // (KHR_parallel_shader_compile) instead of stalling the first frames.
+  const [warm, setWarm] = useState(false);
+  const onWarm = useCallback((ms: number) => {
+    performance.mark?.('aether:shaders-warm', { detail: { ms } });
+    setWarm(true);
+    requestAnimationFrame(() => requestAnimationFrame(() => window.dispatchEvent(new Event(SCENE_READY_EVENT))));
+  }, []);
   return (
     <div className="fixed inset-0 touch-none">
       <Canvas
-        dpr={[0.8, DEVICE.maxDpr]}
-        shadows={low ? false : { type: THREE.PCFSoftShadowMap }}
+        frameloop={warm ? 'always' : 'never'}
+        dpr={[q.minDpr, q.maxDpr]}
+        shadows={q.shadowMapSize ? { type: THREE.PCFSoftShadowMap } : false}
         gl={{ antialias: true, powerPreference: 'high-performance', alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
         camera={{ position: [0, 12.6, 10.2], fov: 46, near: 0.1, far: 400 }}
       >
         <AdaptiveDpr />
         <Suspense fallback={null}>
-          <SceneContent />
+          <SceneContent warm={warm} onWarm={onWarm} />
         </Suspense>
       </Canvas>
     </div>

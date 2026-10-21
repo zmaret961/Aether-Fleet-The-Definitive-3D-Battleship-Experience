@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import { DIFFICULTY_INFO } from '../game/ai';
 import type { ShotEvent } from '../game/engine';
 import { useGame } from '../state/store';
@@ -177,7 +177,7 @@ export function BattleScreen() {
       {/* damage pulse */}
       <AnimatePresence>
         {flash > 0 && !reducedMotion && (
-          <motion.div
+          <m.div
             key={flash}
             initial={{ opacity: 0.85 }}
             animate={{ opacity: 0 }}
@@ -225,7 +225,7 @@ export function BattleScreen() {
         <div className="h-9" aria-live="polite">
           <AnimatePresence mode="wait">
             {lastOutcome && lastEvent && (
-              <motion.div
+              <m.div
                 key={lastOutcome.seq}
                 initial={{ opacity: 0, y: reducedMotion ? 0 : -6, scale: reducedMotion ? 1 : 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -236,7 +236,7 @@ export function BattleScreen() {
                 <span className="label-caps !text-[0.625rem] !text-white/55">{lastOutcome.by === 'player' ? 'You' : 'Legacy'}</span>
                 <span className="num font-mono text-xs text-white/70">{cellName(lastEvent.coord)}</span>
                 <span className="font-semibold">{lastOutcome.text}</span>
-              </motion.div>
+              </m.div>
             )}
           </AnimatePresence>
         </div>
@@ -365,7 +365,7 @@ export function BattleScreen() {
 
       <AnimatePresence>
         {tip && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: reducedMotion ? 0 : 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: reducedMotion ? 0 : 8 }}
@@ -379,7 +379,7 @@ export function BattleScreen() {
               </span>
             </div>
             <p className="text-sm leading-relaxed text-white/85">{tip}</p>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

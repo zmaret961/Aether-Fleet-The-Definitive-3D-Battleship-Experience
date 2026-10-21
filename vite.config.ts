@@ -17,7 +17,8 @@ function vendorChunk(id: string): string | undefined {
   if (/node_modules\/three\//.test(id)) return 'three';
   if (/node_modules\/(postprocessing|@react-three\/postprocessing|n8ao)\//.test(id)) return 'postfx';
   if (/node_modules\/(@react-three\/(fiber|drei)|its-fine|suspend-react|react-use-measure)\//.test(id)) return 'r3f';
-  if (/node_modules\/(framer-motion|motion-dom|motion-utils)\//.test(id)) return 'motion';
+  // framer-motion is left to Rollup: `m` + AnimatePresence stay in the shell and
+  // the LazyMotion feature bundle (src/ui/motionFeatures.ts) splits off on its own.
   // zustand is shared by the app store and R3F; keep it with React so the shell
   // never statically pulls in the 3D chunks.
   if (/node_modules\/(react|react-dom|scheduler|zustand|use-sync-external-store)\//.test(id)) return 'react';

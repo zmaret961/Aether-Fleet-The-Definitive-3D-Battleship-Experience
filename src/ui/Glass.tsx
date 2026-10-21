@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from 'react';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { audio } from '../audio/engine';
 import { useGame } from '../state/store';
 
@@ -80,7 +80,7 @@ export const FadeIn = ({
     scale: reduced ? 1 : 0.985,
   };
   return (
-    <motion.div
+    <m.div
       initial={initial}
       animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: reduced ? 0 : -12, scale: reduced ? 1 : 0.99 }}
@@ -88,7 +88,7 @@ export const FadeIn = ({
       className={className}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 };
 

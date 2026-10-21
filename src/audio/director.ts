@@ -63,7 +63,7 @@ export function initAudioDirector(): () => void {
   });
 
   const unsubFx = fx.subscribe((e) => {
-    if (e.type === 'marker') return;
+    if (e.type === 'marker' || e.type === 'bossMood') return;
     const far = e.side === 'enemy';
     const pan = panForColumn(e.coord.x, far);
     const match = useGame.getState().match;

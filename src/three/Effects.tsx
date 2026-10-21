@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { fx, MISSILE_FLIGHT_MS } from '../state/fx';
 import type { BoardSide } from '../state/fx';
 import { useGame } from '../state/store';
+import { scaleCount } from './quality';
 import { cellToWorld, LEGACY_MONOLITH_POSITION, LEGACY_MONOLITH_SCALE, PALETTE, PLAYER_BOARD_POS } from './config';
 import {
   addTrauma,
@@ -58,7 +59,7 @@ export function Burst({
   birth: number;
   position?: [number, number, number];
 }) {
-  const geometry = useMemo(() => burstGeometry(spec), [spec]);
+  const geometry = useMemo(() => burstGeometry({ ...spec, count: scaleCount(spec.count) }), [spec]);
   const material = useMemo(() => makeParticleMaterial(spec, birth), [spec, birth]);
   useEffect(
     () => () => {
@@ -473,7 +474,7 @@ export function EffectsLayer() {
   useEffect(
     () =>
       fx.subscribe((e) => {
-        if (e.type === 'marker') return; // markers come from board state, not fx
+        if (e.type === 'marker' || e.type === 'bossMood') return; // markers come from board state, not fx
         const birth = fxNow();
         const pos = cellWorld(e.side, e.coord);
         const item: Item = { id: nextId++, kind: e.type, birth, life: LIFE[e.type], side: e.side, pos };

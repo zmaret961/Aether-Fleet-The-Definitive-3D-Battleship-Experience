@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import { audio } from '../audio/engine';
 
 const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
@@ -126,8 +126,8 @@ export function EasterEggs() {
   return (
     <AnimatePresence>
       {egg && (
-        <motion.div key={egg.seq} className="pointer-events-none">
-          <motion.div
+        <m.div key={egg.seq} className="pointer-events-none">
+          <m.div
             initial={{ opacity: 0, y: -16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10 }}
@@ -139,7 +139,7 @@ export function EasterEggs() {
             <div className="label-caps mt-2 !text-[0.5rem]">
               Easter egg {egg.found}/{TOTAL_EGGS} found
             </div>
-          </motion.div>
+          </m.div>
           {egg.confetti && (
             <div className="confetti-burst" aria-hidden="true">
               {Array.from({ length: 40 }, (_, index) => {
@@ -155,7 +155,7 @@ export function EasterEggs() {
               })}
             </div>
           )}
-        </motion.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

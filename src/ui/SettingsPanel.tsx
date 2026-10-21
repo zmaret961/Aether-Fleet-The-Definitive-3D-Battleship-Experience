@@ -1,6 +1,6 @@
 import { useEffect, useId } from 'react';
 import type { ReactNode } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import { useGame } from '../state/store';
 import type { PerfMode, Settings } from '../state/store';
 import { GlassButton, GlassPanel, Kbd } from './Glass';
@@ -49,14 +49,14 @@ function Modal({ open, onClose, labelledBy, children, width = 'max-w-md' }: { op
   return (
     <AnimatePresence>
       {open && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-[#020812]/60 p-4 backdrop-blur-md"
           onClick={onClose}
         >
-          <motion.div
+          <m.div
             initial={{ scale: reduced ? 1 : 0.94, y: reduced ? 0 : 14 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: reduced ? 1 : 0.96, y: reduced ? 0 : 10 }}
@@ -68,8 +68,8 @@ function Modal({ open, onClose, labelledBy, children, width = 'max-w-md' }: { op
             aria-labelledby={labelledBy}
           >
             {children}
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   );
