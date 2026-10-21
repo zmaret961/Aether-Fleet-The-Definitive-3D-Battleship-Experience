@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { DIFFICULTY_INFO } from '../game/ai';
 import { storyToText } from '../game/story';
@@ -52,7 +53,11 @@ export function MatchStoryPanel({ story }: { story: MatchStory }) {
         <span className="text-emerald-500/70">LEGACY-MONOLITH&gt; </span>
         {story.monolithQuote}
       </div>
-      <AnimatePresence>{sharing && <SharePanel story={story} onClose={() => setSharing(false)} />}</AnimatePresence>
+      {/* portalled: the result panel is transformed and scrolls, which would trap a fixed overlay inside it */}
+      {createPortal(
+        <AnimatePresence>{sharing && <SharePanel story={story} onClose={() => setSharing(false)} />}</AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }

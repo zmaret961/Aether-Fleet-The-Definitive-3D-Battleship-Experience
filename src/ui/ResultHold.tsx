@@ -44,14 +44,14 @@ export function ResultHold() {
           aria-label="Skip to field report"
         >
           <motion.div
-            className="absolute inset-x-0 top-0 h-[9vh] bg-black/85"
+            className="absolute inset-x-0 top-0 h-[9vh] bg-black/95"
             initial={{ y: '-100%' }}
             animate={{ y: 0 }}
             transition={bar}
             aria-hidden="true"
           />
           <motion.div
-            className="absolute inset-x-0 bottom-0 flex h-[11vh] min-h-20 flex-col items-center justify-center gap-1.5 bg-black/85"
+            className="absolute inset-x-0 bottom-0 flex h-[11vh] min-h-20 flex-col items-center justify-center gap-1.5 bg-black/95"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             transition={bar}

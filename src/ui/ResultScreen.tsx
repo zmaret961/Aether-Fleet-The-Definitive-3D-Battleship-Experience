@@ -130,7 +130,7 @@ export function ResultScreen() {
             </div>
           )}
 
-          <footer className="relative mt-6 flex flex-col-reverse items-center justify-between gap-3 sm:flex-row">
+          <footer className="sticky -bottom-6 z-10 -mx-6 mt-4 flex flex-col-reverse items-center justify-between gap-3 border-t border-white/10 bg-[#0a1020]/90 px-6 pt-4 pb-6 backdrop-blur-md sm:-bottom-8 sm:-mx-8 sm:flex-row sm:px-8 sm:pb-8">
             <span className="num text-xs text-white/60">
               Record vs {DIFFICULTY_INFO[difficulty].label}: <strong className="text-white">{rec ? `${rec.wins}W – ${rec.losses}L` : '—'}</strong>
             </span>
